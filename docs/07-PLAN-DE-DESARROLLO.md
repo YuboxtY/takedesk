@@ -47,7 +47,7 @@
 
 * **Objetivo:** ejecutar agentes reales de ≥ 2 proveedores en paralelo con salida en vivo, cancelación y recuperación.
 * **Módulos:** `agent-adapters` (claude, codex-exec; esqueleto acp/opencode), scheduler de recursos, reconciler, UI de agentes/permisos, `capabilities`.
-* **Tareas:** interfaz `AgentAdapter` + fixtures; adaptador Claude (SDK, `canUseTool`, abort); adaptador Codex (`exec --json`; evaluar `app-server`); OpenCode y Antigravity en una segunda tanda dentro de la etapa si el tiempo lo permite, si no, en la etapa 7; eventos normalizados + NDJSON + índice; cancelación graceful/force con árbol de procesos; reconciliación al arrancar; panel de capacidades; límites de concurrencia; medición de RAM/CPU por run.
+* **Tareas:** interfaz `AgentAdapter` + fixtures; adaptador Claude (`claude-cli` sobre el binario oficial con tu suscripción; SDK solo para API key), `canUseTool`/aprobaciones según PoC-9; adaptador Codex (`exec --json`; evaluar `app-server`); OpenCode y Antigravity en una segunda tanda dentro de la etapa si el tiempo lo permite, si no, en la etapa 7; eventos normalizados + NDJSON + índice; cancelación graceful/force con árbol de procesos; reconciliación al arrancar; panel de capacidades; límites de concurrencia; medición de RAM/CPU por run.
 * **Dependencias:** Etapa 1; CLIs instalados y autenticación decidida (D-09). **Complejidad:** alta. **Tiempo:** 3–4 sem.
 * **Riesgos:** cambios de formato en CLIs; autenticación; `.cmd` en Windows; aprobaciones no uniformes.
 * **Pruebas:** contract tests por adaptador con fixtures reales; caos: matar Core durante run (CA-11); 2 agentes de proveedores distintos en paralelo con logs sin mezclar (CA-02); test de que `interactiveApprovals=false` oculta aprobar (CA-12); cancelación sin huérfanos.

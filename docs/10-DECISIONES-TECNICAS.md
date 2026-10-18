@@ -12,12 +12,13 @@
 | D-06 | Orquestador propio mínimo; coordinador emite plan validado | Propuesta |
 | D-07 | Android: React Native + Expo Dev Build | Propuesta |
 | D-08 | Red privada: Tailscale + emparejamiento propio firmado | Propuesta |
-| D-09 | Autenticación de proveedores: API key / CLI autenticado por el usuario; no reenviar suscripciones | **Requiere tu decisión** |
+| D-09 | Autenticación: suscripción del usuario mediante los CLIs oficiales sin modificar; la app nunca toca tokens | **Aceptada con reservas** (ver abajo) |
 | D-10 | Logs/salidas en NDJSON rotado; SQLite solo índice y metadatos | Propuesta |
 | D-11 | Almacén de secretos en Windows (librería a elegir) | Pendiente de evaluación |
 | D-12 | Contratos con Zod en `packages/contracts` | Propuesta |
 | D-13 | Monorepo pnpm; Turborepo diferido | Propuesta |
 | D-14 | Merge siempre manual; integración secuencial | Propuesta (fuerte, del documento) |
+| D-16 | Planificación por cuotas de suscripción (pool por proveedor) | Propuesta |
 | D-15 | Presupuesto de disco/RAM por defecto para el hardware del usuario | Propuesta |
 
 ---
@@ -49,11 +50,26 @@
 
 ## D-05 · Estrategia de adaptadores
 * **Contexto:** capacidades heterogéneas (`01` §4.2).
-* **Decisión:** interfaz común con `capabilities`. Claude → Agent SDK ✅; Codex → `exec --json` primero, `app-server` si hacen falta aprobaciones/hilos (parte `experimentalApi` ✅); Antigravity → `agy` headless stream-json 🔎 (sin ACP nativo); Gemini CLI → `--acp` ✅ (opcional, no instalado); OpenCode → servidor HTTP+SDK ✅ (o ACP); `generic-pty` como último recurso.
+* **Decisión:** interfaz común con `capabilities`. Claude → `claude-cli` (binario oficial sin modificar con tu sesión; ver D-09) y Agent SDK ✅ solo con API key; Codex → `exec --json` primero, `app-server` si hacen falta aprobaciones/hilos (parte `experimentalApi` ✅); Antigravity → `agy` headless stream-json 🔎 (sin ACP nativo); Gemini CLI → `--acp` ✅ (opcional, no instalado); OpenCode → servidor HTTP+SDK ✅ (o ACP); `generic-pty` como último recurso.
 * **Alternativa:** solo ACP (más simple; menos funciones y dependencia de adaptadores de terceros 🔎) o solo PTY (frágil).
 * **Consecuencias:** más código inicial, pero cambios de un proveedor no afectan al resto.
 
 **Orden de implementación de adaptadores (según lo instalado):** 1) Claude, 2) Codex, 3) OpenCode (API HTTP documentada, la más sencilla de verificar), 4) Antigravity.
+
+## D-09 (actualizada 2026-10-18) · Suscripción en los cuatro agentes
+* **Hechos leídos en la fuente primaria** (`code.claude.com/docs/en/legal-and-compliance`): el OAuth de suscripción es para "uso ordinario de Claude Code y otras aplicaciones nativas de Anthropic"; los desarrolladores que construyan productos, **incluido con el Agent SDK, deben usar API key**; Anthropic no permite ofrecer login de Claude.ai ni enrutar peticiones con credenciales de plan Free/Pro/Max, ni "recolectar, almacenar o intermediar" credenciales o tokens de sesión; **sí permite que un usuario inicie sesión con su suscripción en el binario de Claude Code sin modificar**; el binario no debe modificarse; Anthropic puede aplicar restricciones **sin previo aviso**. Fuentes secundarias (🔎) cuentan que desde 2026 se bloquearon herramientas de terceros (incluido OpenCode) que usaban el OAuth de Claude y que el uso del OAuth con el Agent SDK se trata como incumplimiento; **no lo verifiqué en una fuente de Anthropic**.
+* **Decisión (para Claude):** adaptador `claude-cli` que ejecuta **el binario oficial `claude` sin modificar, ya autenticado por ti**, en modo no interactivo (`-p`, `stream-json`). La app **nunca lee, copia ni reenvía** tokens ni el archivo de credenciales. El adaptador con el Agent SDK queda **solo para API key**. Es la lectura más conservadora de las reglas, no una garantía: la frontera entre "herramienta personal" y "producto" no está definida con claridad para tu caso, y el riesgo de una restricción de la cuenta es tuyo. Si quieres certeza total, la única vía inequívoca es usar API key para Claude.
+* **OpenCode:** no usarlo con el OAuth de Claude (🔎 reportado como bloqueado). Dime con qué proveedor lo usas.
+* **Codex:** el inicio de sesión con ChatGPT es la vía recomendada en su documentación (🔎 espejo de la documentación de OpenAI); los términos sobre automatización no los verifiqué. Para ejecución desatendida, algunas fuentes recomiendan API key.
+* **Antigravity:** es el CLI de Google que sustituye a Gemini CLI (🔎 una fuente indica que Gemini CLI dejó de servir cuentas Pro/Ultra el 18-jun-2026); su modo headless está documentado (🔎). Usa modelos Gemini; las cuentas Ultra aparecen con acceso a modelos de terceros y las fuentes discrepan sobre cuáles (probar con tu plan). Términos de uso automatizado sin verificar.
+* **Reglas para todos los adaptadores:** el entorno de los procesos hijos debe conservar lo que cada CLI necesita para encontrar *su propio* inicio de sesión (perfil de usuario/`APPDATA`), pero la app no accede a esos archivos; sin pasar tokens de un proveedor a otro.
+* **Consecuencia práctica:** con suscripciones, el límite no es dinero por token sino **cuota** (ventanas de 5 h y límites semanales, 🔎). Ver D-16.
+
+## D-16 · Planificación por cuotas de suscripción
+* **Contexto:** varios agentes en paralelo gastan **la misma cuota** de tu plan; Google habla de cuotas cada 5 h y semanales y de que el consumo depende del trabajo del agente (🔎); Anthropic indica que los límites de Pro/Max suponen uso "ordinario e individual" ✅.
+* **Decisión:** cada proveedor es un *pool* con concurrencia máxima propia (inicial **2** por proveedor y **3** en total), detección de límites (mensajes de límite/429, y eventos de límite cuando el CLI los emita) y **pausa automática** del pool al agotarse, con aviso. El coordinador debe preferir pocos agentes bien dirigidos a muchos.
+* **Alternativa:** ignorar cuotas (riesgo de quedarte sin cuota a mitad de plan y de que el planificador reintente en bucle).
+* **Consecuencia:** el orquestador (Etapa 6) planifica con "presupuesto de cuota" estimado, no en dólares.
 
 ## D-06 · Orquestación
 * **Decisión:** motor propio (DAG + scheduler + FSM persistidos en SQLite). LangGraph se reevaluará solo si aparecen flujos cíclicos complejos con memoria. El coordinador **no** escribe código ni ejecuta: devuelve `Plan` validado. 

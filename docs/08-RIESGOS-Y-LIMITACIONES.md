@@ -13,7 +13,8 @@
 | R-05 | Core no puede ser servicio → muere al cerrar sesión | A | M | Aceptar y documentar; mantener sesión bloqueada, no cerrada | CA-03/11 |
 | R-06 | Cambios de formato/protocolo en CLIs rompen adaptadores | A | M | Contract tests, versión fija, estado `degraded`, ACP como respaldo | CI nocturno |
 | R-07 | Aprobación interactiva no disponible en algún proveedor | A | M | Capabilities; usar modos de sandbox; no ofrecer lo que no existe | CA-12 |
-| R-08 | Restricciones de autenticación/ToS de proveedores (p. ej. suscripción Claude con Agent SDK) | M | A | API keys, uso del CLI propio del usuario, revisar términos vigentes | Antes de Etapa 2 |
+| R-08 | Restricciones de autenticación/ToS de proveedores: Anthropic puede restringir sin aviso el uso de suscripción por herramientas de terceros ✅ (política) | M | A | CLI oficial sin modificar, app sin acceso a tokens (D-09); alternativa limpia: API key; revisar términos de OpenAI y Google, no verificados | Antes de Etapa 2 y en cada actualización |
+| R-25 | Varios agentes agotan la misma cuota de suscripción (ventanas de 5 h / semanales 🔎) | A | M | Pools por proveedor, pausa automática, coordinador con presupuesto de cuota (D-16) | Etapa 2 y 6 |
 | R-09 | Cuotas/429 y costes inesperados | A | M | Presupuestos por plan/run, semáforos por proveedor, alertas | Etapa 6 |
 | R-10 | RAM/CPU insuficientes para N agentes + Chromium + host remoto | M | M | Scheduler por recursos; medir | PoC-6 |
 | R-11 | Compilación nativa en Windows (node-pty, better-sqlite3) falla | M | M | Prebuilds, toolchain documentada, CI Windows | Etapa 1 |

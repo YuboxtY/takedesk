@@ -69,6 +69,8 @@ El documento define 12 RF (RF-01…RF-12) y 6 grupos de calidad. Clasificación 
 | C-12 | **`packages/remote-bridge` en la estructura** antes de decidir tecnología. | Bajo | No crear hasta cerrar el PoC. |
 | C-13 | **Monaco y webviews:** el documento incluye un "navegador" en los paneles; no define cómo se aísla contenido localhost no confiable en Electron. | Medio | `WebContentsView` aislado con sandbox, sin preload y sin Node (`06`). |
 
+**Actualización 2026-10-18 sobre C-08:** el usuario usa suscripción en los cuatro agentes; la decisión resultante (CLI oficial sin modificar, SDK solo con API key, planificación por cuotas) está en `10` D-09 y D-16, con lectura de la política oficial de Anthropic (✅ `code.claude.com/docs/en/legal-and-compliance`).
+
 Omisiones: política de **actualización de CLIs** de agentes (los eventos cambian entre versiones), **telemetría de costos** por run, **encadenamiento de permisos** para comandos de red, y **modo "dry-run"** del coordinador. Se cubren en `03`/`06`.
 
 ---

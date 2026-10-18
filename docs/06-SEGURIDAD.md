@@ -69,7 +69,7 @@ Límites de confianza: (1) contenido web en Electron → no confiable; (2) salid
 | Contraseñas del host remoto | **No se usan fijas** | Aprobación por sesión |
 | Backups | Sin secretos; cifrados si salen del equipo | |
 
-Autenticación de proveedores: Anthropic exige API key para productos de terceros basados en el Agent SDK y prohíbe ofrecer login claude.ai sin aprobación (✅ `code.claude.com/docs/en/agent-sdk/overview`). Mientras no se aclare, **nuestra app no gestionará ni reenviará credenciales de suscripción**: o API key del usuario, o el CLI instalado autenticado por el propio usuario (decisión D-09, requiere tu confirmación y lectura de los términos vigentes).
+Autenticación de proveedores: Anthropic exige API key para productos de terceros basados en el Agent SDK y prohíbe ofrecer login claude.ai sin aprobación (✅ `code.claude.com/docs/en/agent-sdk/overview`). Mientras no se aclare, **nuestra app no gestionará ni reenviará credenciales de suscripción**: o API key del usuario, o el CLI instalado autenticado por el propio usuario (decisión D-09, ahora **aceptada con reservas**: los agentes usan tu suscripción mediante los CLI oficiales sin modificar; nuestra app **no lee ni almacena** sus credenciales ni archivos de sesión, lo que además reduce la superficie de robo de secretos).
 
 ## 7. Escritorio remoto: reglas específicas
 
