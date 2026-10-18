@@ -57,7 +57,8 @@ Usados juntos por VS Code 🧠. Monaco aporta *DiffEditor* (necesario para RF-06
 Detallado en `01` §4.2 y `03` §5. Criterio: **no inventar uniformidad**.
 * **Claude:** `@anthropic-ai/claude-agent-sdk` ✅ (incluye binario nativo como dependencia opcional; si se omiten optionalDependencies hay que fijar `pathToClaudeCodeExecutable`). Auth: API key para producto (✅ política). Marca: no llamar a nuestra app "Claude Code" ✅.
 * **Codex:** empezar con `codex exec --json` (simple, JSONL) y migrar a `app-server` si se necesitan aprobaciones interactivas/hilos; `app-server` tiene partes `experimentalApi` ✅ → fijar versión del CLI y generar tipos desde su esquema (🧠: el CLI ofrece generación de esquema; verificar comando).
-* **Gemini:** `--acp` preferido; headless `stream-json` como respaldo ✅.
+* **Antigravity (`agy`, el que tienes instalado):** modo headless con `--input-format stream-json --output-format stream-json` por stdin/stdout (eventos `init`, `step_update`, `result`; `permission_mode` por defecto `request-review`) y un SDK de Python 🔎. **No ofrece ACP nativo** según una petición pública de funcionalidad (hay puentes ACP de la comunidad) 🔎. No pude leer su documentación oficial desde el entorno. Adaptador propio sobre stream-json.
+* **Gemini CLI:** documentado ✅ (`--acp`, headless `stream-json`), pero no lo tienes instalado; queda como opcional. Algunas guías de terceros hablan de migrar de Gemini CLI a `agy` 🔎; no verificado.
 * **OpenCode:** `opencode serve` en loopback con `OPENCODE_SERVER_PASSWORD` ✅ y SDK generado desde OpenAPI ✅.
 * **Otros dignos de consideración (🧠, sin evaluar a fondo):** Aider (CLI, licencia Apache-2.0), Goose, Amp, Cline CLI. Entrarían por ACP o adaptador simple.
 

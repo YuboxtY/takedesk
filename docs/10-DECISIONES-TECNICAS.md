@@ -49,9 +49,11 @@
 
 ## D-05 · Estrategia de adaptadores
 * **Contexto:** capacidades heterogéneas (`01` §4.2).
-* **Decisión:** interfaz común con `capabilities`. Claude → Agent SDK ✅; Codex → `exec --json` primero, `app-server` si hacen falta aprobaciones/hilos (parte `experimentalApi` ✅); Gemini → `--acp` ✅; OpenCode → servidor HTTP+SDK ✅ (o ACP); `generic-pty` como último recurso.
+* **Decisión:** interfaz común con `capabilities`. Claude → Agent SDK ✅; Codex → `exec --json` primero, `app-server` si hacen falta aprobaciones/hilos (parte `experimentalApi` ✅); Antigravity → `agy` headless stream-json 🔎 (sin ACP nativo); Gemini CLI → `--acp` ✅ (opcional, no instalado); OpenCode → servidor HTTP+SDK ✅ (o ACP); `generic-pty` como último recurso.
 * **Alternativa:** solo ACP (más simple; menos funciones y dependencia de adaptadores de terceros 🔎) o solo PTY (frágil).
 * **Consecuencias:** más código inicial, pero cambios de un proveedor no afectan al resto.
+
+**Orden de implementación de adaptadores (según lo instalado):** 1) Claude, 2) Codex, 3) OpenCode (API HTTP documentada, la más sencilla de verificar), 4) Antigravity.
 
 ## D-06 · Orquestación
 * **Decisión:** motor propio (DAG + scheduler + FSM persistidos en SQLite). LangGraph se reevaluará solo si aparecen flujos cíclicos complejos con memoria. El coordinador **no** escribe código ni ejecuta: devuelve `Plan` validado. 
@@ -67,6 +69,7 @@
 ## D-09 · Autenticación con proveedores (requiere tu respuesta)
 * **Hechos:** Anthropic: productos de terceros sobre Agent SDK → API key; no se permite ofrecer login/limites de claude.ai sin aprobación previa ✅; marca "Claude Code" no permitida en productos derivados ✅. Para Codex/Gemini/OpenCode no verifiqué términos equivalentes.
 * **Opciones:** (a) API keys del usuario guardadas en almacén seguro (más claro, coste por token); (b) usar el CLI ya autenticado del usuario con su suscripción (más barato, **zona gris** al orquestarlo desde nuestra app; leer términos vigentes); (c) mezclar según proveedor.
+* **Instalados por el usuario (2026-10-18):** Claude Code, Codex, OpenCode, Antigravity. Falta el método de autenticación de cada uno. Para Antigravity tampoco verifiqué términos.
 * **Recomendación:** (a) por defecto; (b) solo tras revisar términos de cada proveedor. **Necesito tu elección.**
 
 ## D-10 · Logs fuera de la BD

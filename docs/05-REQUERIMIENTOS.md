@@ -136,9 +136,9 @@ RF-08*: PoC (`09`). RF-03/RF-10: versiones de CLIs y su autenticación autorizad
 
 | # | Pregunta | Estado |
 |---|---|---|
-| 1 | Windows y Android | **Parcial.** PC: portátil ASUS ROG Strix G531GT, Windows (aspecto de Windows 11; **falta la edición**: Home/Pro, visible en Configuración → Sistema → Información → "Especificaciones de Windows", o con `winver`). Móvil: **Samsung Galaxy S25 Ultra** (falta versión de Android/One UI). ¿Tienes permisos de administrador? |
+| 1 | Windows y Android | **Casi completa.** PC: portátil ASUS ROG Strix G531GT con **Windows 11 Home**. Móvil: **Samsung Galaxy S25 Ultra** (falta versión de Android/One UI). Falta saber si tienes permisos de administrador. |
 | 2 | Primera entrega: ¿cliente externo o visor embebido? | **Pendiente** (recomendado: externo) |
-| 3 | CLIs instalados y autenticación | **Pendiente** (D-09) |
+| 3 | CLIs instalados y autenticación | **Parcial.** Instalados: **Claude Code, Codex, OpenCode y Antigravity**. Falta cómo se autentica cada uno (API key o suscripción) → D-09 |
 | 4 | Hardware y nº máximo de agentes | **Respondida:** i7-9750H (6 núcleos/12 hilos), **16 GB RAM**, GTX 1650 4 GB + Intel UHD 630, SSD 477 GB con **solo ~63 GB libres**. Ver `08` §6. Límite inicial propuesto: **3 agentes simultáneos** (a validar con PoC-6) |
 | 5 | Política de comandos riesgosos | Propuesta vigente: preguntar siempre |
 | 6 | Solo uso personal | **Respondida: sí, por ahora.** Mantiene viable usar/forkear software AGPL/GPL sin distribuirlo; si cambia, ver `08` §3 |

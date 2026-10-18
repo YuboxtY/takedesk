@@ -81,7 +81,7 @@ Con `better-sqlite3` + Drizzle: simular 365 días de eventos (p. ej. 20 runs/dí
 3–5 días: (a) módulo Expo (Kotlin) que renderice un stream Moonlight en `SurfaceView` dentro de la app RN; **o** (b) evaluar fork del cliente Flutter de RustDesk con pantallas de agentes. Criterio: ver un stream y enviar un clic desde dentro de nuestra app compilada con Dev Build. Salida: semáforo y estimación revisada para Etapa 5b.
 
 ### PoC-9 · Adaptadores de agentes (mínimo viable)
-Script Node: lanzar Claude (SDK) y Codex (`exec --json`) en worktrees distintos con la misma tarea; normalizar eventos; cancelar a mitad; matar el proceso padre y comprobar reconciliación. Aceptación: CA-02, CA-11. Anotar qué campos reales emite cada versión (sustituye mis suposiciones 🔎).
+Script Node: lanzar Claude (SDK) y Codex (`exec --json`) en worktrees distintos (después OpenCode con `opencode serve` y Antigravity con `agy` en stream-json, que son los CLIs que tienes instalados) con la misma tarea; normalizar eventos; cancelar a mitad; matar el proceso padre y comprobar reconciliación. Aceptación: CA-02, CA-11. Anotar qué campos reales emite cada versión (sustituye mis suposiciones 🔎).
 
 ### PoC-10 · Red privada y exposición
 Android en datos móviles → Core por Tailscale; escaneo externo de la IP pública del hogar: ningún puerto abierto (CA-05, RNF-02). Medir latencia API y reconexión de WS.

@@ -98,6 +98,7 @@ Cada adaptador **normaliza** a `AgentEvent` (`output.delta`, `tool.started/finis
 | `codex-exec` | `codex exec --json`, JSONL; `exec resume` | No (sandbox por flag) | `thread_id` guardado |
 | `codex-appserver` | JSON-RPC stdio: `initialize`, `thread/start`, `turn/start`; responde requests de aprobación | Sí | `thread/resume` |
 | `acp` | JSON-RPC stdio (`gemini --acp`, `opencode acp` 🔎, bridges) | Sí (según agente) | `loadSession` si capability |
+| `antigravity` | `agy` en modo headless con stream-json bidireccional (stdin/stdout); esperar el evento `result` de cada turno antes del siguiente 🔎 | Probable (`permission_mode: request-review`; cómo se responde en headless sin verificar; un hook de terceros reporta *soft-deny* en modo print 🔎) | Por verificar |
 | `opencode-server` | `opencode serve` (loopback+password) + SDK; SSE `/event` | Sí (`/permissions`) | Sesiones persistidas por OpenCode |
 | `generic-pty` (último recurso) | PTY + parser | No | No |
 
