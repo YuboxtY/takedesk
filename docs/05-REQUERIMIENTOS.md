@@ -132,10 +132,13 @@ Eventos: `agent.run.created`, `agent.output.delta`, `agent.approval.requested`, 
 ## 7. Dependencias externas de requisitos
 RF-08*: PoC (`09`). RF-03/RF-10: versiones de CLIs y su autenticación autorizada por cada proveedor (decisión del usuario: ¿qué CLIs hay instalados y con qué cuenta?). RF-07: cuenta Tailscale (u otra red privada).
 
-## 8. Decisiones del documento que siguen abiertas (necesito tu respuesta)
-1. Versión exacta de **Windows** (Home/Pro/Enterprise) y **Android**, y si tienes permisos de administrador.
-2. ¿La primera entrega acepta **cliente remoto externo** (recomendado) o exiges visor embebido desde el día uno?
-3. ¿Qué **CLIs** tienes y cómo te autenticas (API key vs. suscripción)?
-4. **Hardware** (RAM/CPU/GPU) y número máximo deseado de agentes.
-5. Política de comandos riesgosos (propongo: preguntar siempre).
-6. ¿Uso estrictamente personal para siempre? (afecta licencias copyleft).
+## 8. Decisiones abiertas del documento original (estado tras tu respuesta del 2026-10-18)
+
+| # | Pregunta | Estado |
+|---|---|---|
+| 1 | Windows y Android | **Parcial.** PC: portátil ASUS ROG Strix G531GT, Windows (aspecto de Windows 11; **falta la edición**: Home/Pro, visible en Configuración → Sistema → Información → "Especificaciones de Windows", o con `winver`). Móvil: **Samsung Galaxy S25 Ultra** (falta versión de Android/One UI). ¿Tienes permisos de administrador? |
+| 2 | Primera entrega: ¿cliente externo o visor embebido? | **Pendiente** (recomendado: externo) |
+| 3 | CLIs instalados y autenticación | **Pendiente** (D-09) |
+| 4 | Hardware y nº máximo de agentes | **Respondida:** i7-9750H (6 núcleos/12 hilos), **16 GB RAM**, GTX 1650 4 GB + Intel UHD 630, SSD 477 GB con **solo ~63 GB libres**. Ver `08` §6. Límite inicial propuesto: **3 agentes simultáneos** (a validar con PoC-6) |
+| 5 | Política de comandos riesgosos | Propuesta vigente: preguntar siempre |
+| 6 | Solo uso personal | **Respondida: sí, por ahora.** Mantiene viable usar/forkear software AGPL/GPL sin distribuirlo; si cambia, ver `08` §3 |

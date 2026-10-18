@@ -120,7 +120,7 @@ Solicitud → Coordinador(read-only) → Plan JSON (Zod) → [Aprobación humana
 * **Integración:** merge **secuencial**, cada uno en una rama de integración; tests tras cada merge; el merge final a la rama del usuario es siempre manual (botón + diff).
 
 ## 7. Planificador de recursos y concurrencia
-Entradas: RAM libre, CPU (carga 1 min), nº de runs por proveedor, 429 recientes. Regla: iniciar si `ram_libre > reserva + estimación(perfil)`, `semaforo[proveedor] > 0` y `activos < max_configurado`. Estimación inicial por proveedor se **mide** (PoC-6) y se ajusta con media móvil. Reintentos con *backoff* exponencial solo para errores transitorios (red/429), nunca para fallos de lógica.
+Entradas: RAM libre, CPU (carga 1 min), nº de runs por proveedor, 429 recientes. Regla: iniciar si `ram_libre > reserva + estimación(perfil)`, `semaforo[proveedor] > 0` y `activos < max_configurado`. Estimación inicial por proveedor se **mide** (PoC-6) y se ajusta con media móvil. **Valores iniciales para el equipo del usuario (16 GB RAM, ~63 GB libres): máx. 3 runs simultáneos, reserva de 3 GB de RAM, no iniciar con < 15 GB de disco libre y cuota de worktrees de 15 GB** (ver `08` §6; son puntos de partida, no resultados). Reintentos con *backoff* exponencial solo para errores transitorios (red/429), nunca para fallos de lógica.
 
 ## 8. Git
 * `git` CLI con `spawn` (argv, nunca shell). `GIT_TERMINAL_PROMPT=0`.

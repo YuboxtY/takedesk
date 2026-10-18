@@ -8,7 +8,7 @@
 |---|---|---|---|---|---|
 | R-01 | El host remoto no captura UAC/bloqueo/login | A | M | Aceptar límite; solo servicio del host; documentar en UI "PC bloqueada" | PoC-3 |
 | R-02 | Visor embebido inviable o demasiado costoso | M | M | Mantener cliente externo (ruta A) como objetivo del MVP | PoC-8 |
-| R-03 | Copyleft (AGPL/GPL) condiciona distribución | M | M | Uso personal; si se distribuye, publicar código; procesos externos separados | Decisión legal del usuario |
+| R-03 | Copyleft (AGPL/GPL) condiciona distribución | B (uso solo personal confirmado) | M | Uso personal; si se distribuye, publicar código; procesos externos separados | Decisión legal del usuario |
 | R-04 | Sin monitor físico, Windows reduce o desactiva la salida gráfica | M | A | Dummy plug HDMI / controlador de pantalla virtual | PoC-3 |
 | R-05 | Core no puede ser servicio → muere al cerrar sesión | A | M | Aceptar y documentar; mantener sesión bloqueada, no cerrada | CA-03/11 |
 | R-06 | Cambios de formato/protocolo en CLIs rompen adaptadores | A | M | Contract tests, versión fija, estado `degraded`, ACP como respaldo | CI nocturno |
@@ -84,3 +84,19 @@ Presupuesto por plan/run (tokens, tiempo, intentos), alertas al 80 %, pausa al e
 4. Agentes manuales antes que coordinador.
 5. Dos adaptadores completos antes que cuatro.
 6. Sin voz, sin Wake-on-LAN, sin multiusuario.
+
+## 6. Perfil de hardware del usuario y consecuencias (añadido 2026-10-18)
+
+Datos aportados por el usuario (captura de Configuración → Sistema → Información): ASUS ROG Strix G531GT; Intel Core i7-9750H @ 2,60 GHz; 16 GB RAM (15,9 utilizable, 2667 MT/s); NVIDIA GeForce GTX 1650 (4 GB) + Intel UHD Graphics 630; SSD de 477 GB con **414 GB usados (≈63 GB libres, ~87 % lleno)**; Windows de 64 bits. Móvil: Samsung Galaxy S25 Ultra. Uso exclusivamente personal por ahora. **Sin medir aún**; lo que sigue son implicaciones de diseño, no resultados.
+
+| Factor | Implicación | Acción en el diseño |
+|---|---|---|
+| **Disco: ~63 GB libres** (el factor más limitante) | Cada worktree repite archivos del proyecto y, normalmente, `node_modules`/artefactos de compilación (el tamaño real depende del proyecto; sin medir). Registros, backups y caches compiten por el mismo espacio. | Cuota total de worktrees configurable (propuesta inicial **15 GB**); no iniciar runs si el espacio libre baja de **15 GB**; pnpm con store en la misma unidad (enlaces duros) para no duplicar dependencias; retención más corta por defecto (eventos detallados 14 días, salidas de terminal 3 días); backups comprimidos y con tope; alerta de disco bajo. Recomendación: liberar espacio o mover worktrees/backups a otra unidad si la hay. Un SSD casi lleno también rinde peor. |
+| **16 GB RAM** | Electron + Core + Chromium (pruebas visibles) + host remoto + N agentes deben caber. Sin cifras públicas verificadas de RAM por agente. | Límite inicial de **3 agentes simultáneos** y reserva de ≥ 3 GB libres para el sistema; el scheduler ajusta con datos de PoC-6. Cargar Monaco/lienzo bajo demanda. |
+| **i7-9750H (6c/12t, portátil)** | Compilaciones/tests paralelos de varios agentes pueden saturar CPU y calentar. | Semáforo de CPU en el scheduler; limitar tests simultáneos; vigilar temperatura/throttling en PoC-6. |
+| **GPU híbrida (GTX 1650 + UHD 630)** | La GTX 1650 tiene codificación por hardware NVENC (🧠 confirmar generación y compatibilidad con Sunshine); el Intel UHD 630 ofrece Quick Sync como alternativa (🧠). En portátiles híbridos la captura de pantalla puede ir por una GPU y la codificación por otra, fuente conocida de problemas (🧠). | PoC-2/PoC-3: probar con selección explícita de GPU/codificador; comparar con codificación por software (CPU) y su coste. |
+| **Es un portátil** | Suspensión al cerrar la tapa, plan de energía, batería y ahorro de energía pueden dejar la PC inaccesible. Con tapa cerrada la pantalla interna se apaga y no sé cómo lo trata cada host (sin probar). Ventaja: tiene pantalla integrada, así que el problema de "sin monitor" (R-04) es menor con tapa abierta. | Guía de configuración: plan "Alto rendimiento"/no suspender conectado a corriente, acción de tapa = "No hacer nada", "keep awake" mientras haya runs (R-23); probar tapa cerrada en PoC-3; PC enchufada para sesiones largas. |
+| **Sin pantalla táctil** (según la captura) | Solo afecta a la UI de escritorio; el control remoto se hace desde el móvil. | Ninguna. |
+| **Windows (edición por confirmar)** | RustDesk y Sunshine no dependen de Pro/Home. Solo importa para RDP (ya descartado) y para opciones de cifrado de disco (BitLocker). | Registrar la edición en PoC-1. |
+| **Galaxy S25 Ultra** | Pantalla grande (útil para el visor remoto) y decodificación de vídeo por hardware (🧠, no verificada). Samsung puede suspender apps en segundo plano ("Optimización de batería"/apps en reposo) (🧠). | Probar decodificación (HEVC/AV1) en PoC-2; excluir nuestra app y el cliente remoto de la optimización de batería; documentar en guía de instalación (R-16). |
+| **Solo uso personal** | Las obligaciones de AGPL/GPL (RustDesk, Sunshine, Moonlight) se activan al distribuir o dar acceso a otros usuarios; con un único usuario no es un obstáculo práctico (🧠 no es asesoramiento legal). | Se mantiene la opción de módulo nativo/fork (ruta B) como viable, sin cambiar la recomendación de empezar con cliente externo. |

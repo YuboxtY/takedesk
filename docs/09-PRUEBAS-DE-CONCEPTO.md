@@ -88,6 +88,12 @@ Android en datos móviles → Core por Tailscale; escaneo externo de la IP públ
 
 ---
 
+### Añadido: pruebas específicas del equipo del usuario (portátil ROG G531GT + S25 Ultra)
+* **PoC-3b · Portátil:** con tapa cerrada y acción "No hacer nada": ¿sigue la captura y el control? ¿Y con la pantalla interna apagada? Probar con el cargador conectado y con batería. Registrar el plan de energía y cuánto tarda en suspender.
+* **PoC-2b · GPU híbrida:** Sunshine con NVENC (GTX 1650), con Quick Sync (UHD 630) y con codificación por software; RustDesk con códecs disponibles. Anotar FPS, latencia, uso de CPU/GPU, temperatura y si aparece pantalla negra por selección de GPU.
+* **PoC-2c · S25 Ultra:** decodificación por hardware en cada cliente; consumo de batería en 30 min; comportamiento con la optimización de batería de Samsung activada/desactivada.
+* **PoC-6b · Disco:** medir el tamaño real de un worktree de tus proyectos (con y sin dependencias, con pnpm) y el espacio libre tras 5 worktrees; validar la cuota de 15 GB. Con ~63 GB libres, esto puede decidir cuántos agentes escritores caben a la vez.
+
 ## C. Cómo se registrarán los resultados
 Plantilla por prueba en este archivo (sección D, a añadir): `ID · fecha · entorno · versión del software · procedimiento · datos medidos · veredicto (Cumple / Parcial / No cumple) · notas`. Un PoC "Cumple" solo con datos medidos y evidencia (capturas/logs), nunca por "se ve bien".
 

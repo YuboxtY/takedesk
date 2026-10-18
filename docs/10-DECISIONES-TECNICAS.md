@@ -18,6 +18,7 @@
 | D-12 | Contratos con Zod en `packages/contracts` | Propuesta |
 | D-13 | Monorepo pnpm; Turborepo diferido | Propuesta |
 | D-14 | Merge siempre manual; integración secuencial | Propuesta (fuerte, del documento) |
+| D-15 | Presupuesto de disco/RAM por defecto para el hardware del usuario | Propuesta |
 
 ---
 
@@ -30,7 +31,8 @@
   4. **WebRTC propio:** coste y riesgo de seguridad altos; descartado para MVP.
   5. **VNC:** viable pero experiencia/seguridad inferiores; fallback.
 * **Decisión provisional:** RustDesk como cliente externo para el MVP por rapidez de PoC y mejor UX de escritorio; **mantener la interfaz `RemoteHost` abstracta** para poder pasar a Moonlight/Sunshine. **Cambiaría la decisión** si PoC-2 muestra: latencia p95 > 150 ms con RustDesk y < con Moonlight; imposibilidad de limitar a canal privado; o fallo de entrada táctil.
-* **Consecuencias:** AGPL: no distribuir fork; usar sin modificar evita obligaciones.
+* **Consecuencias:** AGPL: no distribuir fork; usar sin modificar evita obligaciones. El usuario confirmó (2026-10-18) uso solo personal, por lo que un fork privado también es viable sin obligaciones prácticas (no es asesoramiento legal).
+* **Hardware del usuario:** GPU híbrida GTX 1650 + UHD 630 en portátil: probar codificadores por separado (PoC-2b) y tapa cerrada (PoC-3b).
 
 ## D-02 · Visor externo vs embebido
 * **Decisión:** MVP con cliente externo (intent) + estado del host en nuestra app. Embebido solo tras PoC-8 y aprobación expresa del usuario (implicaciones de copyleft y mantenimiento).
@@ -79,6 +81,12 @@
 * **Merge manual:** cualquier automatización de merge queda fuera de alcance (riesgo de código inseguro/semántico).
 
 ---
+
+## D-15 · Presupuestos por defecto para el equipo del usuario
+* **Contexto:** portátil con 16 GB de RAM y ~63 GB de disco libre (`08` §6).
+* **Decisión:** máx. 3 runs simultáneos; reserva de 3 GB de RAM; no iniciar runs con < 15 GB de disco libre; cuota de worktrees 15 GB; retención corta; pnpm con store en la misma unidad. Todos configurables.
+* **Alternativas:** sin límites (riesgo de llenar el disco y bloquear Windows); límites mucho más conservadores (1–2 agentes; subutiliza el producto).
+* **Consecuencias:** los valores son hipótesis y se ajustan con PoC-6/PoC-6b.
 
 ## Decisiones que se revisarán con datos
 | Decisión | Se revisa tras | Condición de cambio |
