@@ -1,0 +1,31 @@
+# SIN EJECUTAR: aún no se pudo empujar el repositorio a GitHub. Versiones de las acciones tomadas de memoria; verificar.
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+  windows:
+    # Experimental: parte de las pruebas usa bash/sleep (POSIX). Sirve para detectar problemas de
+    # compilación nativa (node-pty, better-sqlite3), rutas y git en Windows. No bloquea.
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:boundaries
+      - run: pnpm typecheck
+      - run: pnpm exec vitest run packages/database packages/git-engine packages/platform packages/domain packages/contracts

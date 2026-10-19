@@ -340,6 +340,8 @@ stateDiagram-v2
   running --> cancelling: cancelar
   cancelling --> cancelled
   cancelling --> failed: no termina (force)
+  cancelling --> completed: termino con exito antes de la cancelacion
+  cancelling --> pending_reconciliation: caida de Core
   running --> pending_reconciliation: caida de Core
   waiting_approval --> pending_reconciliation: caida de Core
   pending_reconciliation --> running: reattached
@@ -431,6 +433,7 @@ flowchart BT
   contracts["contracts"]
   domain["domain"]
   security["security"]
+  platform["platform"]
   database["database"]
   gitengine["git-engine"]
   adapters["agent-adapters"]
@@ -444,11 +447,13 @@ flowchart BT
   database --> domain
   gitengine --> domain
   adapters --> domain
+  adapters --> platform
   orch --> domain
   core --> database
   core --> gitengine
   core --> adapters
   core --> orch
+  core --> platform
   core --> security
   uiweb --> contracts
   desktop --> uiweb

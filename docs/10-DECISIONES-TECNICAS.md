@@ -18,6 +18,8 @@
 | D-12 | Contratos con Zod en `packages/contracts` | Propuesta |
 | D-13 | Monorepo pnpm; Turborepo diferido | Propuesta |
 | D-14 | Merge siempre manual; integración secuencial | Propuesta (fuerte, del documento) |
+| D-17 | Agentes como procesos desacoplados con salida a archivo (reenganche tras caída) | Implementada en Linux |
+| D-18 | Dos canales de eventos: durables (`eventId`) y salida en vivo (`seq`) | Implementada |
 | D-16 | Planificación por cuotas de suscripción (pool por proveedor) | Propuesta |
 | D-15 | Presupuesto de disco/RAM por defecto para el hardware del usuario | Propuesta |
 
@@ -106,6 +108,15 @@
 * **Decisión:** máx. 3 runs simultáneos; reserva de 3 GB de RAM; no iniciar runs con < 15 GB de disco libre; cuota de worktrees 15 GB; retención corta; pnpm con store en la misma unidad. Todos configurables.
 * **Alternativas:** sin límites (riesgo de llenar el disco y bloquear Windows); límites mucho más conservadores (1–2 agentes; subutiliza el producto).
 * **Consecuencias:** los valores son hipótesis y se ajustan con PoC-6/PoC-6b.
+
+## D-17 · Procesos desacoplados con salida a archivo
+* **Contexto:** CA-03/CA-11 exigen que cerrar la UI o caer el Core no mate los runs, y que tras reiniciar no se declaren completados sin evidencia. Con tuberías hijas del Core, al caer este el agente pierde su salida (y suele morir).
+* **Decisión:** wrapper `detached` + `output.log` + `exit.json`; reenganche releyendo el log; token de inicio de proceso contra reutilización de PID.
+* **Alternativas:** proceso hijo con tuberías (simple; no sobrevive); servicio externo/daemon (más piezas); *named pipes*/sockets (más complejos, peor trazabilidad).
+* **Consecuencias:** sin stdin interactivo; polling (50 ms) en vez de eventos; archivos que la retención debe purgar. **Verificado** con procesos reales en Linux (reenganche, agente muerto → `interrupted`, agente terminado → completado con su `exit.json`). **Sin verificar en Windows.**
+
+## D-18 · Eventos durables vs. salida en vivo
+* **Decisión:** solo los cambios de estado tienen `eventId` y se reproducen tras reconectar; la salida de agentes va por `seq` por run y se recupera del NDJSON. Evita inflar `core_event` y permite contrapresión sin perder estado.
 
 ## Decisiones que se revisarán con datos
 | Decisión | Se revisa tras | Condición de cambio |

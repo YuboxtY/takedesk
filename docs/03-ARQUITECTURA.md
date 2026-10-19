@@ -58,7 +58,7 @@ docs/                   estos documentos + ADRs
 ## 4. Contratos
 
 * **Versionado:** `apiVersion` en rutas (`/v1`), y `schemaVersion` en cada evento. Compatibilidad cliente↔servidor negociada en `GET /v1/health` (`minClient`, `serverVersion`). Android antiguo → mensaje "actualiza la app".
-* **Eventos:** `{ eventId (monótono por Core), ts, scope {projectId, taskId?, runId?}, type, v, payload }`. Cliente guarda `lastEventId`; al reconectar pide `?since=`. Core conserva ventana de eventos recientes en BD/NDJSON; si el hueco es mayor, ordena *resync* (snapshot).
+* **Eventos (implementado en Etapa 1):** dos canales en `WS /v1/events`. (1) **Durables** `{ eventId, ts, v, type, scope, payload }`: estados de runs, aprobaciones, worktrees, pausas de proveedor, degradación. Se guardan en la tabla `core_event` (id autoincremental = `eventId`); el cliente guarda `lastEventId` y al reconectar pide `?since=`; si el hueco ya no está retenido el Core envía `resync` y el cliente recarga por REST. Al conectar se suscribe primero, se reproduce lo pendiente y se deduplica por `eventId`. (2) **Salida en vivo** `{ channel:'output', runId, seq, event }`: NO es durable en el canal (con contrapresión se descarta); se recupera por `GET /v1/runs/:id/events?since=<seq>` desde el NDJSON del run. Esto corrige la formulación inicial ("todo evento lleva eventId"), que habría inflado la BD con cada fragmento de salida.
 * **Backpressure WS:** límite de tamaño de mensaje, cola por cliente con descarte de `agent.output.delta` intermedios (colapsando en chunks) pero **nunca** de eventos de estado/aprobación.
 * **Idempotencia:** comandos mutadores aceptan `Idempotency-Key`.
 * **API del documento** (`/v1/health`, `/projects`, `/tasks`, `/runs`, `/runs/:id/cancel`, `/approvals/:id`, `/runs/:id/events`, `WS /v1/events`) se conserva y se completa en `05`.
@@ -75,8 +75,10 @@ interface AgentAdapter {
   events(run: RunHandle): AsyncIterable<AgentEvent>;
   respondToApproval?(run: RunHandle, id: string, d: Decision): Promise<void>; // solo si capability
   cancel(run: RunHandle, mode: 'graceful' | 'force'): Promise<void>;
-  recover(runId: string): Promise<RecoverResult>; // 'reattached' | 'resumable' | 'unsupported'
+  recover(handle: RunHandle, req: RecoverRequest): Promise<RecoverResult>; // 'reattached' | 'resumable' | 'interrupted'
 }
+// En el código real (packages/agent-adapters) start() devuelve un RunSession {handle, events, cancel, dispose, respondToApproval?};
+// dispose() deja de observar SIN terminar al agente (apagado del Core).
 
 interface Capabilities {
   interactiveApprovals: boolean;
@@ -104,6 +106,9 @@ Cada adaptador **normaliza** a `AgentEvent` (`output.delta`, `tool.started/finis
 | `generic-pty` (último recurso) | PTY + parser | No | No |
 
 **Estabilidad frente a cambios de CLI:** `probe()` registra la versión; fixtures de salida real por versión en `agent-adapters/__fixtures__`; *contract tests* en CI nocturno contra CLIs instalados; si un CLI actualiza y rompe, el adaptador marca `degraded` en vez de fallar silenciosamente.
+
+### 5.2b Adaptador de procesos desacoplado (implementado y probado en Linux)
+`JsonlProcessAdapter` no mantiene al agente como hijo con tuberías del Core. Lanza un **wrapper** (`runner-wrapper.mjs`) *detached* que ejecuta el CLI con su salida a `output.log` y, al terminar, escribe `exit.json` (de forma atómica). El Core lee `output.log` (polling) y emite eventos. Consecuencias: (a) si el Core se cae, el agente **sigue vivo**; (b) al reiniciar, `recover()` se **reengancha** releyendo el log (el RunManager descarta los primeros `lastSeq` eventos ya persistidos); (c) un resultado solo se declara con **evidencia**: `exit.json`, o la muerte del wrapper (que se reporta como *fallo*, nunca éxito); (d) el PID se valida con un **token de inicio** del proceso para no confundirlo con otro que reutilice el PID. Limitaciones: sin stdin interactivo (las aprobaciones deben venir por otro canal, p. ej. MCP/HTTP); las ramas de Windows (`detached`, `taskkill /T`, PowerShell para el token) están **sin validar en Windows real**.
 
 ### 5.3 Permisos y seguridad del agente
 Modo por defecto `default` (pregunta) o `plan`. `bypassPermissions` / "dangerously-skip" **solo** dentro de un sandbox desechable y nunca disponible desde Android. Reglas de denegación globales (p. ej. `rm -rf`, `git push --force`, acceso fuera del worktree) se aplican también en el adaptador (`disallowedTools` en Claude ✅).

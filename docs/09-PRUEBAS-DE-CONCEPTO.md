@@ -34,6 +34,12 @@ Los 15 diagramas de `04-DIAGRAMAS.md` se renderizaron a SVG con `@mermaid-js/mer
 ### A-5 · Verificación de licencias y documentación
 Leí directamente los archivos de licencia/documentación citados en `01` §8 (marcados ✅). Varios dominios no resolvían desde el entorno (`learn.microsoft.com`, `developers.openai.com`, `opencode.ai`, `geminicli.com`), por lo que esas afirmaciones quedan 🔎/🧠.
 
+### A-6 · Código de la Etapa 1–3 (2026-10-19)
+`pnpm verify` en Linux: **límites de módulos OK (40 imports) · tipos OK · 95 pruebas en 10 archivos**. Cubre: contratos, máquina de estados, redacción, plataforma, BD (migraciones, corrupción detectada, backup con escritura sostenida, retención), log NDJSON, git-engine, adaptadores de procesos (reenganche, cancelación del árbol, agente muerto), RunManager (límites, recursos, cuota, aprobaciones, cancelación, reconciliación con procesos reales), API/WebSocket/terminales y supervisor.
+**Prueba de mutación** (se rompe el código a propósito y se comprueba que las pruebas fallan): 6 de 6 detectadas — stream cortado declarado *completed*; wrapper muerto declarado éxito; auth desactivada; merge con conflicto sin abortar; límite por proveedor ignorado; worktree sucio borrado sin avisar.
+**Humo del proceso real:** el Core arranca como proceso independiente, `/health` público mínimo, 401 sin token, 421 con `Host` falso, run completo con worktree, SIGTERM → código 0, el token no aparece en el log, y reinicia sobre la misma BD.
+**Límites:** solo Linux; adaptadores simulados y un agente de prueba (no CLIs reales); sin Windows, Electron ni Android; carga y duración (soak) sin medir.
+
 ---
 
 ## B. Pruebas a ejecutar por el usuario (sin ejecutar)

@@ -4,6 +4,45 @@
 > Regla general: **ninguna etapa se da por terminada sin sus criterios de aceptación ejecutados** (no basta que compile). Cada etapa termina con demo + registro de resultados en `09`.
 > **Puerta 0:** no se crea la estructura del monorepo hasta que apruebes este plan.
 
+## Revisión crítica del plan antes de implementar (2026-10-19)
+
+El usuario aprobó el plan condicionado a que lo revisara con rigor. Hallazgos y correcciones:
+
+| # | Hallazgo | Corrección aplicada |
+|---|---|---|
+| P-01 | El plan suponía acceso a la PC para la Etapa 0; ahora el usuario solo tiene el móvil. Bloquear todo habría desperdiciado semanas. | Se reordena: el **Core, datos, Git y adaptadores** (independientes de Windows/Android) se construyen ya; **PoC-1…4 siguen siendo la puerta** antes de la Etapa 5. Electron y Android esperan (no se pueden verificar sin dispositivos). |
+| P-02 | El desarrollo ocurre en Linux (sesión en la nube); lo específico de Windows (ConPTY, `taskkill`, `.cmd`, rutas largas) no se puede probar aquí. | Todo lo dependiente del SO vive en `packages/platform` con dobles de prueba; CI con job de Windows (`.github/workflows/ci.yml`, **sin ejecutar**) y PoC-5 en la PC. Nada de Windows se da por validado. |
+| P-03 | El **trabajo no está respaldado**: el push a GitHub falla (403) y el contenedor es efímero. | Prioridad inmediata del usuario: reconectar GitHub. Hasta entonces el riesgo de perder trabajo es real. |
+| P-04 | El diseño de eventos ("todo evento con eventId") era ingenuo: inflaría la BD con la salida de los agentes. | Dos canales (D-18). |
+| P-05 | Con tuberías hijas, un Core caído deja a los agentes sin salida; CA-03/CA-11 no se cumplirían. | Procesos desacoplados con salida a archivo (D-17). |
+| P-06 | OpenCode gratuito puede entrenar con tus datos (🔎). | `dataPolicy` + confirmación explícita por run (R-26). |
+| P-07 | Un `shutdown()` del Core habría marcado como fallidos runs que seguían vivos (fallo de mi propio diseño, hallado al planear las pruebas). | Bandera de apagado + `dispose()` en las sesiones; cubierto por pruebas. |
+| P-08 | Guardar el prompt redactado habría alterado en silencio los runs en cola tras un reinicio. | Se guarda el prompt real; se documenta como dato sensible (`06` §2b). |
+| P-09 | Estimaciones: asumían trabajo continuo en PC; desarrollar desde el móvil alarga el calendario. | Las etapas que dependen de dispositivos (0, 5) se estiman en función de cuándo haya PC. |
+
+No se cambia la elección del stack ni la arquitectura de fondo.
+
+## Estado de implementación (2026-10-19)
+
+Verificado en **Linux** con pruebas automatizadas (`pnpm verify`: límites de módulos + tipos + 95 pruebas). **Nada de Electron, Android, Windows ni agentes reales (Claude/Codex/OpenCode/Antigravity) está implementado o probado.**
+
+| Criterio | Estado |
+|---|---|
+| CA-01 abrir proyecto y restaurar workspace | ❌ Falta UI/workspace (el Core registra proyectos) |
+| CA-02 dos agentes en paralelo | 🟡 Concurrencia, límites y aislamiento verificados con adaptadores simulados y de procesos; **no con agentes reales** |
+| CA-03 cerrar Electron no termina sesiones | 🟡 Lado Core verificado (terminal sobrevive al cierre del cliente; runs desacoplados); **Electron no existe** |
+| CA-04 diff + aprobación + merge sin perder trabajo | 🟡 Git-engine verificado (conflicto aborta sin pérdida); falta UI/flujo de aprobación de merge |
+| CA-05 / CA-06 / CA-07 (Android, Ver mi PC, revocación) | ❌ Requieren Android y PC |
+| CA-08 sin `completed` sin evidencia | ✅ en Linux con procesos reales (y mutación comprobada) |
+| CA-09 backup/restauración | ✅ en Linux (SQLite con escritura sostenida; backup verificado y reabierto) |
+| CA-10 logs sin secretos | 🟡 Redacción probada; falta política de logs rotados en disco para el log del proceso |
+| CA-11 matar el Core a mitad de un run | ✅ en Linux (reenganche, agente muerto → interrupted, agente terminado → completed con evidencia) |
+| CA-12 sin botón de aprobar si no hay capacidad | ❌ Falta UI (la API rechaza con 409 si el run no admite aprobaciones) |
+
+Etapa 1 (Core, BD, terminal, supervisor): **parcial** — backend hecho; falta Electron, tarea programada de inicio y verificación en Windows.
+Etapa 2 (agentes): **parcial** — interfaz, cola, cuotas, aprobaciones, cancelación y reconciliación hechas; **faltan los adaptadores reales** (necesitan los CLIs y tus sesiones para verificar su formato).
+Etapa 3 (Git): **parcial** — motor hecho; falta integración con aprobación y UI.
+
 ## Vista general
 
 | Etapa | Nombre | Duración est. | Puerta de salida |

@@ -36,6 +36,16 @@ Límites de confianza: (1) contenido web en Electron → no confiable; (2) salid
 | T-15 | Persistencia del atacante | Dispositivo comprometido | Revocación inmediata, rotación de claves, auditoría | |
 | T-16 | Acceso físico al PC | Sesión iniciada sin bloqueo | Bloqueo automático; si se usa auto-login, bloqueo inmediato; cifrado de disco (BitLocker) | |
 
+## 2b. Controles implementados en la Etapa 1 (y verificados con pruebas en Linux)
+* API solo en `127.0.0.1` por defecto; cabecera `Host` restringida a hostnames permitidos (421 en caso contrario: defensa contra DNS rebinding).
+* Token local aleatorio de 256 bits en `api-token` (0600 en POSIX; **en Windows el modo no restringe: falta ACL con `icacls`**, pendiente); comparación en tiempo constante; `/v1/health` público y mínimo.
+* WebSocket con **ticket de un solo uso y 60 s** (no se pone el token en la URL).
+* Cuerpos JSON validados con Zod; JSON con `__proto__` filtrado; tamaño máximo de cuerpo y de mensaje WS.
+* Redacción de secretos en NDJSON, índice, difusión en vivo y cabecera `Authorization` de los logs; el diagnóstico no incluye tokens ni rutas de credenciales (probado, incluido que el token no aparece en el log del proceso real).
+* Rutas: nombres de rama/proyecto validados, `assertInside` contra `..` y symlinks; los procesos hijos heredan solo una lista blanca de variables de entorno.
+* **Dato sensible:** la base de datos guarda el *prompt* real de cada run (necesario para que un run en cola sobreviva a un reinicio). Los backups de SQLite contienen por tanto texto del usuario: tratarlos como sensibles y cifrarlos si salen del equipo.
+* **Aún NO implementado:** emparejamiento por dispositivo, firmas de petición, anti-replay, revocación, permisos por dispositivo (Etapa 4); ACL del token en Windows; aislamiento de Electron (no existe aún).
+
 ## 3. Autenticación y emparejamiento
 
 1. En escritorio: "Añadir dispositivo" crea `pairing_code` aleatorio, TTL 2 min, un solo uso; se muestra como QR con la **huella (hash de la clave pública) del Core** para evitar suplantación del Core (TOFU anclado en QR).
