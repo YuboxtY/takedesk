@@ -41,8 +41,13 @@ describe('validación', () => {
     expect(() => assertInside(wtRoot, path.join(wtRoot, '..', 'otro'))).toThrow(/fuera/);
     const outside = path.join(tmp, 'outside');
     fs.mkdirSync(outside);
-    fs.symlinkSync(outside, path.join(wtRoot, 'link'));
-    expect(() => assertInside(wtRoot, path.join(wtRoot, 'link', 'x'))).toThrow(/fuera/);
+    try {
+      fs.symlinkSync(outside, path.join(wtRoot, 'link'), 'junction');
+      expect(() => assertInside(wtRoot, path.join(wtRoot, 'link', 'x'))).toThrow(/fuera/);
+    } catch (e) {
+      // En Windows crear enlaces puede requerir privilegios; no es un fallo del código bajo prueba.
+      if ((e as NodeJS.ErrnoException).code !== 'EPERM') throw e;
+    }
     expect(() => assertInside(wtRoot, path.join(wtRoot, 'ok', 'x'))).not.toThrow();
   });
 

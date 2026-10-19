@@ -8,7 +8,9 @@
     "test": "vitest run",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "verify": "pnpm check:boundaries && pnpm typecheck && pnpm test",
-    "core": "tsx services/core/src/main.ts"
+    "core": "tsx services/core/src/main.ts",
+    "poc": "pnpm --filter @aiw/core exec tsx scripts/poc-env.ts",
+    "test:win": "vitest run packages/database packages/git-engine packages/domain packages/contracts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

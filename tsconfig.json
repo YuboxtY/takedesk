@@ -11,5 +11,5 @@
     "isolatedModules": true,
     "types": ["node"]
   },
-  "include": ["packages/*/src", "packages/*/test", "services/*/src", "services/*/test", "packages/database/drizzle.config.ts"]
+  "include": ["packages/*/src", "packages/*/test", "services/*/src", "services/*/test", "services/*/scripts", "packages/database/drizzle.config.ts"]
 }
