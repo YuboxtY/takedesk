@@ -130,7 +130,7 @@ describe('RunManager: concurrencia, recursos y cuota', () => {
 
   it('un límite de cuota pausa el proveedor y reanuda solo', async () => {
     const f = new FakeAdapter({ script: (ctx) => ctx.emit({ kind: 'usage', rateLimited: true }) });
-    const m = env.manager([f], { quotaPauseMs: 500 });
+    const m = env.manager([f], { quotaPauseMs: 3000 }); // pausa larga: bajo carga 500 ms podía vencer antes de comprobar la cola
     const r1 = await m.createRun(body());
     await waitFor(() => state(r1.id) === 'completed');
     const r2 = await m.createRun(body());
@@ -214,7 +214,7 @@ const procAdapter = () => new JsonlProcessAdapter({
 describe('Reconciliación tras caída del Core (CA-08, CA-11) con procesos reales', () => {
   it('reengancha a un agente vivo, no duplica eventos y completa con evidencia', async () => {
     const m1 = env.manager([procAdapter()]);
-    const run = await m1.createRun(body({ adapter: 'proc', prompt: 'slow 15', mode: 'read' }));
+    const run = await m1.createRun(body({ adapter: 'proc', prompt: 'slow 15 300', mode: 'read' }));
     await waitFor(() => (env.repos.runs.get(run.id)!.lastSeq >= 3) || undefined, 8000, 'primeros eventos');
     const seqAtCrash = env.repos.runs.get(run.id)!.lastSeq;
     m1.shutdown(); // "se cae" el Core: el agente sigue vivo
@@ -254,7 +254,8 @@ describe('Reconciliación tras caída del Core (CA-08, CA-11) con procesos reale
     const run = await m1.createRun(body({ adapter: 'proc', prompt: 'ok', mode: 'read' }));
     await waitFor(() => env.repos.runs.get(run.id)!.lastSeq >= 1 || undefined);
     m1.shutdown();
-    await sleep(600);
+    const exitFile = path.join(env.repos.runs.get(run.id)!.runDir, 'exit.json');
+    await waitFor(() => fs.existsSync(exitFile) || undefined, 8000, 'el agente termina solo'); // sin sleeps fijos
     const m2 = env.manager([procAdapter()]);
     await m2.reconcile();
     await waitFor(() => state(run.id) === 'completed', 8000);

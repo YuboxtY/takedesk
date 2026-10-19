@@ -11,7 +11,11 @@ import type { ResourceProbe } from '../src/resources';
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export async function waitFor<T>(fn: () => T | undefined | false | Promise<T | undefined | false>, timeoutMs = 8000, what = 'condición'): Promise<T> {
+/** Factor de holgura de los plazos de espera (solo se paga si la condición no llega). AIW_TEST_SCALE=1 para exigir plazos estrictos. */
+const SCALE = Number(process.env.AIW_TEST_SCALE) || 4;
+
+export async function waitFor<T>(fn: () => T | undefined | false | Promise<T | undefined | false>, baseTimeoutMs = 8000, what = 'condición'): Promise<T> {
+  const timeoutMs = baseTimeoutMs * SCALE;
   const t0 = Date.now();
   for (;;) {
     const v = await fn();
@@ -64,7 +68,8 @@ export async function makeEnv(over: Partial<CoreConfig> = {}): Promise<Env> {
     cleanup() {
       for (const m of managers) m.shutdown();
       database.close();
-      fs.rmSync(tmp, { recursive: true, force: true });
+      // Tolerante: un proceso que está terminando puede retener la carpeta en Windows (EPERM/EBUSY).
+      try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 40, retryDelay: 250 }); } catch { /* temporal huérfano */ }
     },
   };
 }

@@ -13,11 +13,12 @@ if (mode === 'ok') {
   process.exit(3);
 } else if (mode === 'slow') {
   const n = Number(process.argv[3] ?? 10);
+  const ms = Number(process.argv[4] ?? 100); // ritmo de los ticks; las pruebas que necesitan "sigue vivo" lo alargan
   let i = 0;
   const t = setInterval(() => {
     out({ kind: 'output.delta', text: `tick ${++i}` });
     if (i >= n) { clearInterval(t); process.exit(0); }
-  }, 100);
+  }, ms);
 } else if (mode === 'hang') {
   const g = spawn('sleep', ['60'], { stdio: 'ignore' });
   out({ kind: 'output.delta', text: `grandchild ${g.pid}` });

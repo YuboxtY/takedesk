@@ -10,7 +10,17 @@ import { FakeAdapter, JsonlProcessAdapter, NO_CAPABILITIES, type RunSession } fr
 const AGENT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'agent.mjs');
 let tmp: string;
 beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aiw-ad-')); });
-afterEach(() => fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }));
+// Limpieza tolerante: en Windows un proceso que está terminando aún puede tener la carpeta abierta (EPERM/EBUSY).
+// Un temporal que no se pudo borrar no es un fallo de la prueba.
+afterEach(() => { try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 40, retryDelay: 250 }); } catch { /* temporal huérfano */ } });
+
+/** Espera por condición (no por tiempo fijo): robusto bajo carga. */
+async function until(cond: () => boolean, ms = 20000): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { if (cond()) return true; await sleep(50); }
+  return cond();
+}
+const dead = (pid: number) => until(() => !isAlive(pid));
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function collect(s: RunSession, max = Infinity): Promise<AgentEvent[]> {
@@ -49,9 +59,8 @@ describe('JsonlProcessAdapter', () => {
     await s.cancel('force');
     const rest = await collect(s);
     expect(rest.at(-1)).toMatchObject({ kind: 'run.finished', ok: false });
-    await sleep(200);
-    expect(isAlive(gpid)).toBe(false);
-    expect(isAlive(s.handle.pid!)).toBe(false);
+    expect(await dead(gpid)).toBe(true);
+    expect(await dead(s.handle.pid!)).toBe(true);
   });
 
   it('cancelar (graceful) termina al agente y a su nieto', async () => {
@@ -61,13 +70,12 @@ describe('JsonlProcessAdapter', () => {
     await s.cancel('graceful');
     const rest = await collect(s);
     expect(rest.at(-1)).toMatchObject({ kind: 'run.finished', ok: false });
-    await sleep(200);
-    expect(isAlive(gpid)).toBe(false);
+    expect(await dead(gpid)).toBe(true);
   });
 
   it('CA-11: tras "caerse" el Core se reengancha al proceso vivo y recibe el resultado real', async () => {
     const a = adapter();
-    const r = req('r5', 'slow 15');
+    const r = req('r5', 'slow 15 300');
     const s1 = await a.start(r);
     const seen = await collect(s1, 3); // el Core "se cae" aquí: se abandona s1
     expect(seen).toHaveLength(3);
@@ -84,7 +92,7 @@ describe('JsonlProcessAdapter', () => {
     const a = adapter();
     const r = req('r6', 'ok');
     const s1 = await a.start(r);
-    await sleep(800); // terminó solo; nadie leyó
+    expect(await until(() => fs.existsSync(path.join(r.runDir, 'exit.json')))).toBe(true); // terminó solo; nadie leyó
     const rec = await a.recover(s1.handle, { runDir: r.runDir, cwd: r.cwd });
     expect(rec.status).toBe('reattached');
     if (rec.status !== 'reattached') throw new Error('x');
@@ -97,7 +105,7 @@ describe('JsonlProcessAdapter', () => {
     const s1 = await a.start(r);
     await collect(s1, 1);
     await killTree(s1.handle.pid!, { force: true }); // kill -9 del wrapper: no escribe exit.json
-    await sleep(300);
+    expect(await dead(s1.handle.pid!)).toBe(true);
     const rec = await a.recover(s1.handle, { runDir: r.runDir, cwd: r.cwd });
     expect(rec).toMatchObject({ status: 'interrupted' });
     // y el flujo vivo original tampoco declara éxito
