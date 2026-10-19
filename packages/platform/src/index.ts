@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { constants, accessSync, readFileSync, statfsSync } from 'node:fs';
+import { constants, accessSync, existsSync, readFileSync, statfsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -192,4 +192,23 @@ export function baseChildEnv(env: NodeJS.ProcessEnv = process.env): Record<strin
     if (v !== undefined) out[k] = v;
   }
   return out;
+}
+
+/**
+ * Los shims .cmd de npm (p. ej. opencode.cmd) no se pueden lanzar sin shell desde Node (EINVAL) y
+ * pasar prompts por cmd.exe es una fuente de inyección. Se resuelve el destino real del shim:
+ * un .exe, o un script .js ejecutado con el Node actual. Devuelve null si no se reconoce.
+ */
+export function unwrapShim(shimPath: string): { command: string; prefixArgs: string[] } | null {
+  let text: string;
+  try {
+    text = readFileSync(shimPath, 'utf8');
+  } catch {
+    return null;
+  }
+  const m = /"%dp0%\\([^"\r\n]+?\.(exe|js|cjs|mjs))"/i.exec(text) ?? /"%~dp0\\([^"\r\n]+?\.(exe|js|cjs|mjs))"/i.exec(text);
+  if (!m) return null;
+  const target = path.join(path.dirname(shimPath), ...m[1]!.split('\\'));
+  if (!existsSync(target)) return null;
+  return m[2]!.toLowerCase() === 'exe' ? { command: target, prefixArgs: [] } : { command: process.execPath, prefixArgs: [target] };
 }

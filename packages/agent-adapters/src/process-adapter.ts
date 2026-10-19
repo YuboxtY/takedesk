@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentEvent, type Capabilities, type DataPolicy } from '@aiw/contracts';
-import { baseChildEnv, getProcessStartToken, isAlive, killTree, resolveExecutable } from '@aiw/platform';
+import { baseChildEnv, getProcessStartToken, isAlive, killTree, resolveExecutable, unwrapShim } from '@aiw/platform';
 import { Channel } from './channel';
 import type {
   AdapterInfo, AgentAdapter, RecoverRequest, RecoverResult, RunHandle, RunSession, StartRequest,
@@ -168,7 +168,11 @@ export class JsonlProcessAdapter implements AgentAdapter {
     fs.mkdirSync(req.runDir, { recursive: true });
     const info = await this.probe();
     if (!info.installed) throw new Error(`Agente no instalado: ${this.cfg.command}`);
-    const args = [WRAPPER, req.runDir, info.path!, ...this.cfg.buildArgs(req)];
+    // Un shim .cmd se sustituye por su destino real: nunca se pasa el prompt por cmd.exe.
+    const isShim = /\.(cmd|bat)$/i.test(info.path!);
+    const shim = isShim ? unwrapShim(info.path!) : null;
+    if (isShim && !shim) throw new Error(`No se pudo resolver el shim ${info.path} a un ejecutable`);
+    const args = [WRAPPER, req.runDir, shim?.command ?? info.path!, ...(shim?.prefixArgs ?? []), ...this.cfg.buildArgs(req)];
     const child = spawn(process.execPath, args, {
       cwd: req.cwd,
       detached: true,

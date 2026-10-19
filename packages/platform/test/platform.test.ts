@@ -70,3 +70,23 @@ describe('platform (rama Windows con dobles; NO validada en Windows real)', () =
     expect(resolveExecutable('claude', { platform: 'win32', env: { PATH: '' } })).toBeNull();
   });
 });
+
+describe('unwrapShim', () => {
+  it('resuelve el .exe de un shim npm y rechaza lo desconocido', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const pathMod = await import('node:path');
+    const { unwrapShim } = await import('../src');
+    const dir = fs.mkdtempSync(pathMod.join(os.tmpdir(), 'aiw-shim-'));
+    try {
+      fs.mkdirSync(pathMod.join(dir, 'node_modules', 'x', 'bin'), { recursive: true });
+      fs.writeFileSync(pathMod.join(dir, 'node_modules', 'x', 'bin', 'x.exe'), '');
+      fs.writeFileSync(pathMod.join(dir, 'x.cmd'), '@ECHO off\r\n"%dp0%\\node_modules\\x\\bin\\x.exe"   %*\r\n');
+      expect(unwrapShim(pathMod.join(dir, 'x.cmd'))).toEqual({ command: pathMod.join(dir, 'node_modules', 'x', 'bin', 'x.exe'), prefixArgs: [] });
+      fs.writeFileSync(pathMod.join(dir, 'y.cmd'), '@echo hola\r\n');
+      expect(unwrapShim(pathMod.join(dir, 'y.cmd'))).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

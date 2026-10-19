@@ -120,3 +120,11 @@ Procedimiento: docs/11 parte B. Datos: `poc-report.md`. Veredicto: **Parcial** (
 * **Verificado con salida real:** el evento de sesión (`system/init`), el error de autenticación (`assistant` con `error: authentication_failed` + `result.is_error`) se capturaron de la CLI real. **No verificado:** texto, herramientas y `rate_limit_event` con una sesión autenticada: en el subproceso la CLI respondió "Not logged in" (la sesión de la app de escritorio no se comparte). Para cerrarlo: ejecutar `claude /login` en una terminal y repetir con un prompt real.
 * **Hallazgo Windows corregido:** `killTree(graceful)` usaba `taskkill /T` sin `/F`, que no cierra procesos de consola sin ventana: el árbol seguía vivo. Ahora escala a `/F` tras 3 s (`graceMs`).
 * Los tests de `platform` marcados "POSIX real" (killTree con `setsid`, `resolveExecutable` esperando `node$`) fallan en Windows por diseño; no forman parte de `test:win`.
+
+### PoC-9 (parcial) · 2026-10-19 · Adaptador OpenCode 1.18.25 en Windows — **Cumple (verificado con ejecución real)**
+* `createOpenCodeAdapter`: `opencode run --format json --dir <cwd> [--agent plan] <prompt>`; nunca `--auto`. Los modelos gratuitos por defecto usan `dataPolicy: 'may-train'`.
+* Formato real observado: `step_start` (con `sessionID`), `text`, `tool_use` (llega ya con estado final `completed`), `step_finish` (tokens) y `error` (el proceso sale con código 0 aun así, por eso el adaptador convierte `error` en `run.finished ok:false`).
+* Prueba de extremo a extremo (`services/core/scripts/e2e-opencode.ts`): sesión → `read` → texto final → `run.finished ok`, lanzando por el shim `opencode.cmd`.
+* **Hallazgo Windows corregido:** Node no puede lanzar un `.cmd` sin shell (EINVAL) y pasar el prompt por `cmd.exe` permite inyección. Nuevo `unwrapShim` en `platform` resuelve el `.exe` real del shim npm; el adaptador lo usa y falla con claridad si no lo reconoce.
+* El Core ahora registra los adaptadores `claude` y `opencode` por defecto (el simulado solo con `AIW_ENABLE_FAKE=1`).
+* `services/core/test/server.test.ts` (terminales) sigue fallando en Windows porque los helpers fijan `bash` como shell; no forma parte de `test:win`.

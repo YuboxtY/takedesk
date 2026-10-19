@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { FakeAdapter, type AgentAdapter } from '@aiw/agent-adapters';
+import { FakeAdapter, createClaudeAdapter, createOpenCodeAdapter, type AgentAdapter } from '@aiw/agent-adapters';
 import { applyRetention, createRepos, openDatabase } from '@aiw/database';
 import { loadOrCreateToken } from './auth';
 import { loadConfig } from './config';
@@ -18,9 +18,12 @@ async function main() {
   const repos = createRepos(database.db);
   const bus = new EventBus(repos);
 
-  // Los adaptadores reales (Claude, Codex, OpenCode, Antigravity) llegan en la Etapa 2, tras verificarlos
-  // contra los CLIs instalados. Hasta entonces solo existe el adaptador simulado, y solo si se pide.
-  const adapters = new Map<string, AgentAdapter>();
+  // Adaptadores reales instalados (Claude, OpenCode). Codex y Antigravity: pendientes (no están en PATH).
+  // Un adaptador cuyo CLI no existe se registra igual: el Core informa "no instalado" en la sonda.
+  const adapters = new Map<string, AgentAdapter>([
+    ['claude', createClaudeAdapter()],
+    ['opencode', createOpenCodeAdapter()],
+  ]);
   if (process.env.AIW_ENABLE_FAKE === '1') adapters.set('fake', new FakeAdapter());
 
   const pty = new PtyManager({ shell: cfg.shell, maxSessions: cfg.maxTerminals });
