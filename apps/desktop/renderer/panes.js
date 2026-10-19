@@ -23,6 +23,8 @@
     xt.open(holder);
     let id = null;
     let destroyed = false;
+    let gotData = false;
+    let lastData = 0;
     const refit = () => { try { fit.fit(); } catch { /* aún sin tamaño */ } };
 
     xt.onData((d) => id && api.term.input(id, d));
@@ -44,13 +46,18 @@
         }
         if (destroyed) return;
         AIW.terms.set(id, {
-          write: (d) => xt.write(d),
+          write: (d) => { lastData = Date.now(); gotData = true; xt.write(d); },
           exit: (code) => xt.write(`\r\n[el terminal terminó con código ${code}]\r\n`),
         });
         await api.term.attach(id); // el Core reenvía el scrollback al reconectar
         refit();
         api.term.resize(id, xt.cols, xt.rows);
-        if (created && tile.state.autorun) setTimeout(() => id && api.term.input(id, tile.state.autorun + '\r'), 1800);
+        if (created && tile.state.autorun) {
+          // Esperar a que el shell esté listo (salida inicial y 500 ms sin datos); si no, a los 10 s.
+          const t0 = Date.now();
+          while (!destroyed && Date.now() - t0 < 10000 && !(gotData && Date.now() - lastData > 500)) await new Promise((r) => setTimeout(r, 150));
+          if (!destroyed && id) api.term.input(id, tile.state.autorun + '\r');
+        }
       } catch (e) {
         msg.hidden = false;
         msg.textContent = String(e.message || e);
