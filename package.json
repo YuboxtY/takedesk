@@ -10,13 +10,15 @@
     "verify": "pnpm check:boundaries && pnpm typecheck && pnpm test",
     "core": "tsx services/core/src/main.ts",
     "poc": "pnpm --filter @aiw/core exec tsx scripts/poc-env.ts",
-    "test:win": "vitest run packages/database packages/git-engine packages/domain packages/contracts"
+    "test:win": "vitest run packages/database packages/git-engine packages/domain packages/contracts apps/desktop",
+    "desktop": "pnpm --filter @aiw/desktop start"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "node-pty",
-      "esbuild"
+      "esbuild",
+      "electron"
     ]
   },
   "devDependencies": {

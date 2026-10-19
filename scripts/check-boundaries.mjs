@@ -14,9 +14,11 @@ export const ALLOWED = {
   database: ['contracts', 'domain'],
   'agent-adapters': ['contracts', 'domain', 'platform'],
   core: ['contracts', 'domain', 'platform', 'database', 'git-engine', 'agent-adapters'],
+  // La app de escritorio solo habla con el Core por HTTP: no importa ningún módulo interno.
+  desktop: [],
 };
 
-const DIRS = { contracts: 'packages/contracts', domain: 'packages/domain', platform: 'packages/platform', 'git-engine': 'packages/git-engine', database: 'packages/database', 'agent-adapters': 'packages/agent-adapters', core: 'services/core' };
+const DIRS = { contracts: 'packages/contracts', domain: 'packages/domain', platform: 'packages/platform', 'git-engine': 'packages/git-engine', database: 'packages/database', 'agent-adapters': 'packages/agent-adapters', core: 'services/core', desktop: 'apps/desktop' };
 
 function* walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

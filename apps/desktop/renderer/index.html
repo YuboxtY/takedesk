@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Workspace</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>AI Workspace</h1>
+    <span id="status" class="badge">conectando…</span>
+  </header>
+  <main>
+    <section>
+      <h2>Proyectos</h2>
+      <div class="row">
+        <button id="add-project">Añadir carpeta…</button>
+        <select id="project"></select>
+      </div>
+      <p id="project-msg" class="msg"></p>
+    </section>
+    <section>
+      <h2>Nuevo run</h2>
+      <div class="row">
+        <select id="adapter"></select>
+        <select id="mode">
+          <option value="read">Solo lectura (plan)</option>
+          <option value="write">Escritura (en worktree)</option>
+        </select>
+      </div>
+      <textarea id="prompt" rows="4" placeholder="¿Qué debe hacer el agente?"></textarea>
+      <label id="policy-row" hidden><input type="checkbox" id="policy"> Acepto que este proveedor puede usar los datos para entrenar modelos</label>
+      <div class="row"><button id="start" class="primary">Lanzar</button><span id="run-msg" class="msg"></span></div>
+    </section>
+    <section>
+      <h2>Runs</h2>
+      <table><thead><tr><th>Estado</th><th>Agente</th><th>Modo</th><th>Título</th><th></th></tr></thead><tbody id="runs"></tbody></table>
+    </section>
+    <section>
+      <h2>Salida <span id="out-title" class="muted"></span></h2>
+      <pre id="output">Selecciona un run.</pre>
+    </section>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>
