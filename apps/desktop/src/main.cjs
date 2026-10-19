@@ -6,6 +6,7 @@ const { createProxy } = require('./api-proxy.cjs');
 const { ensureCore } = require('./core-launcher.cjs');
 const { createTerminalBridge } = require('./terminal-bridge.cjs');
 const { sanitizeWorkspace } = require('./workspace.cjs');
+const backgrounds = require('./backgrounds.cjs');
 
 let request = null;
 let bridge = null;
@@ -73,6 +74,21 @@ ipcMain.on('term:input', (_e, id, data) => bridge && bridge.input(String(id), da
 ipcMain.on('term:resize', (_e, id, cols, rows) => bridge && bridge.resize(String(id), cols, rows));
 ipcMain.handle('workspace:load', () => loadWorkspace());
 ipcMain.handle('workspace:save', (_e, w) => saveWorkspace(w && typeof w === 'object' ? w : {}));
+
+const bgDir = () => path.join(app.getPath('userData'), 'backgrounds');
+ipcMain.handle('bg:pick', async () => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  if (backgrounds.listImages(bgDir()).length >= 12) return { error: 'Ya hay 12 imágenes guardadas: elimina alguna (×) antes de añadir otra.' };
+  try {
+    return { name: backgrounds.saveImage(r.filePaths[0], bgDir()) };
+  } catch (e) {
+    return { error: String(e && e.message ? e.message : e) };
+  }
+});
+ipcMain.handle('bg:load', (_e, name) => backgrounds.loadImage(bgDir(), name));
+ipcMain.handle('bg:list', () => backgrounds.listImages(bgDir()));
+ipcMain.handle('bg:remove', (_e, name) => backgrounds.removeImage(bgDir(), name));
 
 ipcMain.handle('dialog:pickFolder', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });

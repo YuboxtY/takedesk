@@ -4,6 +4,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('aiw', {
   request: (method, pathAndQuery, body) => ipcRenderer.invoke('core:request', method, pathAndQuery, body),
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+  bg: {
+    pick: () => ipcRenderer.invoke('bg:pick'),
+    load: (name) => ipcRenderer.invoke('bg:load', name),
+    list: () => ipcRenderer.invoke('bg:list'),
+    remove: (name) => ipcRenderer.invoke('bg:remove', name),
+  },
   workspace: {
     load: () => ipcRenderer.invoke('workspace:load'),
     save: (w) => ipcRenderer.invoke('workspace:save', w),

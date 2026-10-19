@@ -25,6 +25,11 @@ const norm = (s) => s.replaceAll('\r\n', '\n');
 fs.mkdirSync(repo, { recursive: true });
 for (const a of [['init', '-q', '-b', 'main'], ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'i']]) execFileSync('git', a, { cwd: repo });
 
+// imagen de fondo sembrada en la carpeta de datos de la app (el diálogo nativo de archivos no se puede automatizar)
+const SEED_IMG = 'abcdef0123456789.png';
+fs.mkdirSync(path.join(userData, 'backgrounds'), { recursive: true });
+fs.writeFileSync(path.join(userData, 'backgrounds', SEED_IMG), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'));
+
 const env = { ...process.env, AIW_DATA_DIR: dataDir, AIW_PORT: String(PORT), AIW_ENABLE_FAKE: '1', AIW_RESERVE_MEM_GB: '0', AIW_MIN_FREE_DISK_GB: '0' };
 delete env.ELECTRON_RUN_AS_NODE;
 const stop = (p) => { try { execFileSync('taskkill', ['/PID', String(p.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* ya cerrado */ } };
@@ -226,6 +231,31 @@ try {
   if (process.env.E2E_SHOT) fs.writeFileSync(process.env.E2E_SHOT.replace('.png', '-fit.png'), Buffer.from((await page.send('Page.captureScreenshot', { format: 'png' })).result.data, 'base64'));
   layoutBefore.term0 = await rect(page, 'terminal', 0); // el arrastre con zoom movió este panel a propósito
   layoutBefore.agent0 = await rect(page, 'agent', 0);
+  // ---- apariencia: fondo por espacio y tema
+  const bgClass = () => page.evaluate("[...document.getElementById('canvas-scroll').classList].find(c => c.startsWith('bg-')) || ''");
+  const bgImage = () => page.evaluate("getComputedStyle(document.getElementById('canvas-scroll')).backgroundImage");
+  await click(page, '#bg-btn');
+  check('el menú de fondo se abre', await waitFor(() => page.evaluate("!document.getElementById('bg-menu').hidden")));
+  await click(page, '[data-bg-kind="grid"]');
+  check('Cuadrícula cambia el fondo', await waitFor(async () => (await bgClass()) === 'bg-grid'));
+  await click(page, '[data-bg-kind="gradient"]');
+  await waitFor(() => page.evaluate("!!document.querySelector('[data-bg-gradient=\"ocean\"]')"));
+  await click(page, '[data-bg-gradient="ocean"]');
+  check('el degradado Océano se aplica', await waitFor(async () => (await bgClass()) === 'bg-gradient' && (await bgImage()).includes('rgb(3, 27, 52)')));
+  await click(page, '[data-bg-kind="image"]');
+  check('las imágenes guardadas aparecen como opciones', await waitFor(() => page.evaluate(`!!document.querySelector('[data-bg-image="${SEED_IMG}"]')`)));
+  await click(page, `[data-bg-image="${SEED_IMG}"]`);
+  check('una imagen como fondo (data URL local, sin rutas del disco)', await waitFor(async () => (await bgClass()) === 'bg-image' && (await bgImage()).includes('data:image/png')));
+  await page.evaluate("(() => { const c = document.querySelector('.bg-color'); c.value = '#202040'; c.dispatchEvent(new Event('input', { bubbles: true })); })()");
+  check('el color base se aplica', await waitFor(() => page.evaluate("document.getElementById('canvas-scroll').style.getPropertyValue('--bgc') === '#202040'")));
+  await page.evaluate("(() => { const s = document.querySelector('.theme-select'); s.value = 'light'; s.dispatchEvent(new Event('change', { bubbles: true })); })()");
+  check('el tema claro cambia los colores de la aplicación', await waitFor(() => page.evaluate("document.documentElement.getAttribute('data-theme') === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(244, 245, 247)'")));
+  await key('Escape');
+  check('Escape cierra el menú', await waitFor(() => page.evaluate("document.getElementById('bg-menu').hidden")));
+  await key('Digit2', { ctrl: true, alt: true });
+  check('cada espacio tiene su propio fondo (el 2 sigue con puntos)', await waitFor(async () => (await bgClass()) === 'bg-dots'));
+  await key('Digit1', { ctrl: true, alt: true });
+  check('al volver al espacio 1 regresa su imagen', await waitFor(async () => (await bgClass()) === 'bg-image'));
   await sleep(1200); // guardado del layout con espacios y de la cámara
 
   // ---- cierre normal de la ventana (CA-03)
@@ -243,6 +273,7 @@ try {
   check('se restauran los 8 paneles (7 + la nota del espacio 2)', await waitFor(async () => (await page.evaluate("document.querySelectorAll('.tile').length")) === 8));
   check('se restauran los espacios, su nombre y el espacio activo', await waitFor(async () => { const t = await tabs(); return t.length === 2 && t[0].name === 'Espacio 1' && t[1].name === 'Docs' && t[0].active && (await visibleCount()) === 7; }));
   check('la cámara (zoom y posición) del espacio se restaura', await waitFor(async () => Math.abs((await cam()).k - globalThis.savedK) < 0.01), `${(await cam()).label}`);
+  check('el fondo (imagen) y el tema claro se restauran tras reabrir', await waitFor(async () => (await bgClass()) === 'bg-image' && (await page.evaluate("document.documentElement.getAttribute('data-theme')")) === 'light'));
   await key('Digit2', { ctrl: true, alt: true });
   check('el espacio 2 conserva su nota con texto', await waitFor(async () => (await visibleCount()) === 1 && (await inTile(page, 'notes', 1, '.notes-area', "if (e.value !== 'nota del espacio 2') throw new Error('x')"))));
   await key('Digit1', { ctrl: true, alt: true });

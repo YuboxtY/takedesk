@@ -12,6 +12,8 @@
   let activeSpace = null;
   let armedClose = null; // id del espacio con "cerrar" armado (se confirma con un segundo clic)
   let armTimer = null;
+  let theme = 'system';
+  const activeSpaceObj = () => spaces.find((s) => s.id === activeSpace);
 
   AIW.app = {
     projectId: () => $('project').value || null,
@@ -20,7 +22,7 @@
 
   function saveWorkspace() {
     if (!ready) return;
-    api.workspace.save({ projectId: $('project').value || undefined, spaces, activeSpace, layout: canvas.serialize() });
+    api.workspace.save({ projectId: $('project').value || undefined, spaces, activeSpace, theme, layout: canvas.serialize() });
   }
 
   const newSpaceId = () => `s${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
@@ -79,6 +81,8 @@
     activeSpace = id;
     armedClose = null;
     canvas.setActiveSpace(id, spaces.find((s) => s.id === id).view);
+    AIW.appearance.apply(activeSpaceObj().bg);
+    AIW.appearance.refresh();
     renderSpaces();
     saveWorkspace();
   }
@@ -108,6 +112,7 @@
     if (activeSpace === id) {
       activeSpace = spaces[Math.min(idx, spaces.length - 1)].id;
       canvas.setActiveSpace(activeSpace, spaces.find((s) => s.id === activeSpace).view);
+      AIW.appearance.apply(activeSpaceObj().bg);
     }
     renderSpaces();
     saveWorkspace();
@@ -264,6 +269,20 @@
       canvas.add({ ...t, space: spaces.some((s) => s.id === t.space) ? t.space : spaces[0].id });
     }
     canvas.setActiveSpace(activeSpace, spaces.find((s) => s.id === activeSpace).view);
+    theme = w.theme || 'system';
+    AIW.appearance.applyTheme(theme);
+    AIW.appearance.apply(activeSpaceObj().bg);
+    AIW.appearance.mount({
+      getBg: () => activeSpaceObj().bg,
+      setBg: (bg) => {
+        const sp = activeSpaceObj();
+        sp.bg = bg;
+        saveWorkspace();
+      },
+      imageInUse: (name) => spaces.some((x) => x.bg && x.bg.image === name),
+      getTheme: () => theme,
+      setTheme: (t) => { theme = t; saveWorkspace(); },
+    });
     ready = true;
     renderSpaces();
     setInterval(() => {

@@ -141,3 +141,26 @@ describe('workspace: cámara por espacio', () => {
     expect(w.layout[0]).toMatchObject({ x: -500, y: -40 });
   });
 });
+
+describe('workspace: fondo y tema', () => {
+  const { sanitizeWorkspace } = require('../src/workspace.cjs');
+  it('acepta fondos válidos y descarta valores peligrosos', () => {
+    const w = sanitizeWorkspace({
+      theme: 'light',
+      spaces: [
+        { id: 'a', name: 'A', bg: { kind: 'image', image: 'abcdef0123456789.png', dim: 5, color: '#112233' } },
+        { id: 'b', name: 'B', bg: { kind: 'image', image: '../../secreto.png', color: 'red; background:url(http://x)', gradient: 'nope' } },
+        { id: 'c', name: 'C', bg: { kind: 'js' } },
+        { id: 'd', name: 'D', bg: { kind: 'gradient', gradient: 'ocean' } },
+      ],
+    });
+    expect(w.theme).toBe('light');
+    expect(w.spaces[0].bg).toEqual({ kind: 'image', image: 'abcdef0123456789.png', dim: 0.8, color: '#112233' });
+    expect(w.spaces[1].bg).toEqual({ kind: 'image' }); // sin imagen ni color inválidos
+    expect(w.spaces[2].bg).toBeUndefined();
+    expect(w.spaces[3].bg).toEqual({ kind: 'gradient', gradient: 'ocean' });
+  });
+  it('rechaza temas desconocidos', () => {
+    expect('theme' in sanitizeWorkspace({ theme: 'neon' })).toBe(false);
+  });
+});

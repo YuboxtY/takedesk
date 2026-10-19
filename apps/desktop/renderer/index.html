@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data:">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AI Workspace</title>
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
@@ -15,6 +15,7 @@
     <select id="project" title="Proyecto activo"></select>
     <button id="add-project">Añadir carpeta…</button>
     <span id="top-msg" class="msg bad"></span>
+    <button id="bg-btn" title="Fondo y tema">🎨 Fondo</button>
   </header>
   <div id="spaces" role="tablist" aria-label="Espacios"></div>
   <nav id="toolbar" aria-label="Añadir panel"></nav>
@@ -25,11 +26,13 @@
     <button id="zoom-in" title="Acercar (Ctrl+Alt++)">＋</button>
     <button id="zoom-fit" title="Ajustar todo (Ctrl+Alt+F)">⤢ Ajustar</button>
   </div>
+  <div id="bg-menu" hidden></div>
   <div id="help" hidden></div>
   <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
   <script src="tiles.js"></script>
   <script src="panes.js"></script>
+  <script src="appearance.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

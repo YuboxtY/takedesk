@@ -4,6 +4,21 @@ const TYPES = new Set(['terminal', 'agent', 'review', 'notes', 'browser', 'edito
 const MAX_TILES = 40;
 const MAX_STR = 20000;
 const MAX_SPACES = 12;
+const BG_KINDS = new Set(['dots', 'grid', 'lines', 'plain', 'gradient', 'image']);
+const GRADIENTS = new Set(['aurora', 'sunset', 'ocean', 'graphite', 'paper']);
+const THEMES = new Set(['system', 'dark', 'light']);
+const COLOR = /^#[0-9a-fA-F]{6}$/;
+const IMAGE = /^[a-f0-9]{16}\.(png|jpe?g|webp|gif)$/;
+
+function cleanBg(bg) {
+  if (!bg || typeof bg !== 'object' || !BG_KINDS.has(bg.kind)) return undefined;
+  const out = { kind: bg.kind };
+  if (typeof bg.color === 'string' && COLOR.test(bg.color)) out.color = bg.color;
+  if (typeof bg.gradient === 'string' && GRADIENTS.has(bg.gradient)) out.gradient = bg.gradient;
+  if (typeof bg.image === 'string' && IMAGE.test(bg.image)) out.image = bg.image;
+  if (Number.isFinite(bg.dim)) out.dim = Math.min(0.8, Math.max(0, bg.dim));
+  return out;
+}
 const ID = /^[\w-]{1,60}$/;
 
 const num = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : d);
@@ -34,10 +49,11 @@ function sanitizeWorkspace(w) {
         const view = v && typeof v === 'object' && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.k)
           ? { x: Math.min(1e6, Math.max(-1e6, v.x)), y: Math.min(1e6, Math.max(-1e6, v.y)), k: Math.min(3, Math.max(0.1, v.k)) }
           : undefined;
-        return { id: sp.id, name: (typeof sp.name === 'string' ? sp.name.trim() : '').slice(0, 40) || 'Espacio', view };
+        return { id: sp.id, name: (typeof sp.name === 'string' ? sp.name.trim() : '').slice(0, 40) || 'Espacio', view, bg: cleanBg(sp.bg) };
       });
   }
   if (typeof w.activeSpace === 'string' && ID.test(w.activeSpace)) out.activeSpace = w.activeSpace;
+  if (typeof w.theme === 'string' && THEMES.has(w.theme)) out.theme = w.theme;
   if (Array.isArray(w.layout)) {
     out.layout = w.layout
       .filter((t) => t && typeof t === 'object' && TYPES.has(t.type))
