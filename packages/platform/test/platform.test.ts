@@ -45,7 +45,7 @@ describe('platform (rama Windows con dobles; NO validada en Windows real)', () =
   it('killTree usa taskkill /T (y /F si force)', async () => {
     const calls: string[][] = [];
     const run: CommandRunner = async (f, a) => { calls.push([f, ...a]); return { stdout: '' }; };
-    await killTree(1234, { platform: 'win32', run });
+    await killTree(1234, { platform: 'win32', run, graceMs: 0 });
     await killTree(1234, { platform: 'win32', run, force: true });
     expect(calls).toEqual([
       ['taskkill', '/PID', '1234', '/T'],

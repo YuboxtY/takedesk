@@ -114,3 +114,9 @@ Procedimiento: docs/11 parte B. Datos: `poc-report.md`. Veredicto: **Parcial** (
 * **FALLA · `codex` y `agy` no están en PATH** en esta PC (claude y opencode sí). No es fallo de código: instalarlos o indicar su ruta.
 * node-pty: al matar el shell aparece `Error: AttachConsole failed` (conpty_console_list_agent) y salida -1073741510 (0xC000013A); carrera conocida de node-pty al cerrar un ConPTY. El eco y el cierre pasan y no quedan huérfanos.
 * killTree mató hijo y nieto sin restos; SQLite WAL + backup + integrity_check OK; agente desacoplado: reenganche y cancelación OK.
+
+### PoC-9 (parcial) · 2026-10-19 · Adaptador Claude Code 2.1.220 en Windows
+* Implementado `createClaudeAdapter` (`packages/agent-adapters/src/claude-adapter.ts`): `claude -p <prompt> --output-format stream-json --verbose --permission-mode plan|acceptEdits` (read→plan, write→acceptEdits; nunca se salta permisos). Capacidades: sin aprobaciones interactivas todavía (`interactiveApprovals=false`), `resume=native`.
+* **Verificado con salida real:** el evento de sesión (`system/init`), el error de autenticación (`assistant` con `error: authentication_failed` + `result.is_error`) se capturaron de la CLI real. **No verificado:** texto, herramientas y `rate_limit_event` con una sesión autenticada: en el subproceso la CLI respondió "Not logged in" (la sesión de la app de escritorio no se comparte). Para cerrarlo: ejecutar `claude /login` en una terminal y repetir con un prompt real.
+* **Hallazgo Windows corregido:** `killTree(graceful)` usaba `taskkill /T` sin `/F`, que no cierra procesos de consola sin ventana: el árbol seguía vivo. Ahora escala a `/F` tras 3 s (`graceMs`).
+* Los tests de `platform` marcados "POSIX real" (killTree con `setsid`, `resolveExecutable` esperando `node$`) fallan en Windows por diseño; no forman parte de `test:win`.

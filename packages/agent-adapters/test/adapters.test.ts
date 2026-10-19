@@ -10,7 +10,7 @@ import { FakeAdapter, JsonlProcessAdapter, NO_CAPABILITIES, type RunSession } fr
 const AGENT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'agent.mjs');
 let tmp: string;
 beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aiw-ad-')); });
-afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
+afterEach(() => fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }));
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function collect(s: RunSession, max = Infinity): Promise<AgentEvent[]> {

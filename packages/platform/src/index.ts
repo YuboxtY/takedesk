@@ -77,7 +77,7 @@ export async function getProcessStartToken(
  */
 export async function killTree(
   pid: number,
-  opts: { force?: boolean; platform?: Platform; run?: CommandRunner } = {},
+  opts: { force?: boolean; platform?: Platform; run?: CommandRunner; graceMs?: number } = {},
 ): Promise<void> {
   const platform = opts.platform ?? process.platform;
   const run = opts.run ?? defaultRunner;
@@ -88,6 +88,20 @@ export async function killTree(
       await run('taskkill', args);
     } catch {
       /* ya había terminado */
+    }
+    // taskkill sin /F no puede cerrar procesos de consola sin ventana: tras un plazo de gracia
+    // se escala a /F para que 'graceful' nunca deje el árbol vivo.
+    const graceMs = opts.graceMs ?? 3000;
+    if (!opts.force && graceMs > 0) {
+      const deadline = Date.now() + graceMs;
+      while (isAlive(pid) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100));
+      if (isAlive(pid)) {
+        try {
+          await run('taskkill', [...args, '/F']);
+        } catch {
+          /* ya había terminado */
+        }
+      }
     }
     return;
   }
