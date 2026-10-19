@@ -104,4 +104,13 @@ Android en datos móviles → Core por Tailscale; escaneo externo de la IP públ
 Plantilla por prueba en este archivo (sección D, a añadir): `ID · fecha · entorno · versión del software · procedimiento · datos medidos · veredicto (Cumple / Parcial / No cumple) · notas`. Un PoC "Cumple" solo con datos medidos y evidencia (capturas/logs), nunca por "se ve bien".
 
 ## D. Resultados de la Parte B
-*(vacío — pendiente de ejecución)*
+### PoC-5 · 2026-10-19 · Windows 11 Home build 26200 · Node 26.5.1 · pnpm 10.0.0 · Git 2.55.0
+Procedimiento: docs/11 parte B. Datos: `poc-report.md`. Veredicto: **Parcial** (12/15 OK; `test:win` 38/38; boundaries y typecheck OK). `Get-ComputerInfo` rotula la edición como "Windows 10 Home" aunque el build 26200 es Windows 11.
+* `pnpm install` compiló better-sqlite3 con VS Build Tools 2022 sin incidencias; node-pty OK (ConPTY real con PowerShell).
+* Node 26 ya no trae corepack: hubo que `npm i -g corepack` antes de `corepack prepare pnpm@10.0.0 --activate`.
+* **Test ajustado (artefacto de Windows):** con `core.autocrlf=true` (Git for Windows) el merge deja `f.txt` en CRLF; el test de git-engine normaliza saltos de línea. El motor no cambia.
+* **Sonda de versión de shims `.cmd`:** en `poc-env.ts` el quoting de `execFile` rompía `cmd /c`; ahora usa `windowsVerbatimArguments`. opencode 1.18.25 y pnpm 10.0.0 se detectan como shims `.cmd` y se ejecutan vía cmd.exe.
+* **FALLA · rutas largas (>260):** `git worktree add` aborta con `fatal: '$GIT_DIR' too big` aunque se pase `core.longpaths=true`; Node sí crea esas rutas. Límite de Git for Windows (`LongPathsEnabled` está en 0 y no se tocó, es ajuste de sistema). **Mitigación pendiente de diseño:** raíz de worktrees corta (p. ej. `C:\aiw\wt`) y validar longitud de ruta antes de crear.
+* **FALLA · `codex` y `agy` no están en PATH** en esta PC (claude y opencode sí). No es fallo de código: instalarlos o indicar su ruta.
+* node-pty: al matar el shell aparece `Error: AttachConsole failed` (conpty_console_list_agent) y salida -1073741510 (0xC000013A); carrera conocida de node-pty al cerrar un ConPTY. El eco y el cierre pasan y no quedan huérfanos.
+* killTree mató hijo y nieto sin restos; SQLite WAL + backup + integrity_check OK; agente desacoplado: reenganche y cancelación OK.

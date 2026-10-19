@@ -37,9 +37,9 @@ async function check(name: string, fn: () => Promise<string>, timeoutMs = 30_000
   console.log(`${r.ok ? 'OK   ' : 'FALLA'} ${r.name} — ${r.detail}`);
 }
 
-function run(file: string, args: string[], timeout = 15_000): Promise<string> {
+function run(file: string, args: string[], timeout = 15_000, verbatim = false): Promise<string> {
   return new Promise((resolve, reject) =>
-    execFile(file, args, { timeout, windowsHide: true }, (err, stdout, stderr) => (err ? reject(new Error(`${file}: ${String(stderr || err.message).trim()}`)) : resolve(String(stdout).trim()))),
+    execFile(file, args, { timeout, windowsHide: true, windowsVerbatimArguments: verbatim }, (err, stdout, stderr) => (err ? reject(new Error(`${file}: ${String(stderr || err.message).trim()}`)) : resolve(String(stdout).trim()))),
   );
 }
 
@@ -64,7 +64,7 @@ async function main() {
       if (!r) throw new Error('no se encuentra en PATH');
       let version = '';
       try {
-        version = win && r.isShim ? await run('cmd.exe', ['/d', '/s', '/c', `"${r.path}" --version`]) : await run(r.path, ['--version']);
+        version = win && r.isShim ? await run('cmd.exe', ['/d', '/s', '/c', `""${r.path}" --version"`], 15_000, true) : await run(r.path, ['--version']);
       } catch (e) { version = `(--version falló: ${(e as Error).message.slice(0, 100)})`; }
       return `${r.path}${r.isShim ? ' [SHIM .cmd/.bat]' : ''} · ${version.split('\n')[0]}`;
     });

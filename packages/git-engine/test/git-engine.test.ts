@@ -118,13 +118,15 @@ describe('diff y merge', () => {
 
     const r1 = await mergeBranch(repo, a.branch);
     expect(r1.ok).toBe(true);
-    expect(fs.readFileSync(path.join(repo, 'f.txt'), 'utf8')).toBe('desde A\n');
+    // core.autocrlf=true (Git for Windows) convierte a CRLF al hacer checkout del merge
+    expect(fs.readFileSync(path.join(repo, 'f.txt'), 'utf8').replaceAll('\r\n', '\n')).toBe('desde A\n');
 
     const r2 = await mergeBranch(repo, b.branch);
     expect(r2).toEqual({ ok: false, conflicts: ['f.txt'] });
     // tras abortar: repo limpio, contenido de A intacto, rama B intacta
     expect((await status(repo)).clean).toBe(true);
-    expect(fs.readFileSync(path.join(repo, 'f.txt'), 'utf8')).toBe('desde A\n');
+    // core.autocrlf=true (Git for Windows) convierte a CRLF al hacer checkout del merge
+    expect(fs.readFileSync(path.join(repo, 'f.txt'), 'utf8').replaceAll('\r\n', '\n')).toBe('desde A\n');
     expect((await git(repo, ['show', `${b.branch}:f.txt`])).stdout).toBe('desde B\n');
   });
 
