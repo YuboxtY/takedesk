@@ -1,12 +1,15 @@
 'use strict';
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, session, shell } = require('electron');
 const { createProxy } = require('./api-proxy.cjs');
 const { ensureCore } = require('./core-launcher.cjs');
 const { createTerminalBridge } = require('./terminal-bridge.cjs');
 const { sanitizeWorkspace } = require('./workspace.cjs');
 const backgrounds = require('./backgrounds.cjs');
+
+const BROWSER_PARTITION = 'persist:aiw-browser';
+const isWeb = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
 
 let request = null;
 let bridge = null;
@@ -35,6 +38,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
+      webviewTag: true, // solo para el panel Navegador; cada webview se endurece en will-attach-webview
       nodeIntegration: false,
       sandbox: true,
     },
@@ -44,6 +48,22 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
+  });
+  // Cada <webview> (panel Navegador) se fuerza a un perfil propio, sin Node, sin preload y solo http/https.
+  win.webContents.on('will-attach-webview', (e, webPreferences, params) => {
+    delete webPreferences.preload;
+    delete webPreferences.preloadURL;
+    webPreferences.nodeIntegration = false;
+    webPreferences.nodeIntegrationInSubFrames = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+    webPreferences.webSecurity = true;
+    webPreferences.allowRunningInsecureContent = false;
+    params.partition = BROWSER_PARTITION;
+    // allowpopups hace que Electron consulte setWindowOpenHandler (que SIEMPRE deniega y lo convierte en pestaña);
+    // sin el atributo las ventanas nuevas se descartan antes de poder abrirlas como pestaña.
+    params.allowpopups = 'true';
+    if (params.src && !isWeb(params.src) && params.src !== 'about:blank') e.preventDefault();
   });
   void win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 }
@@ -95,7 +115,30 @@ ipcMain.handle('dialog:pickFolder', async () => {
   return r.canceled ? null : r.filePaths[0];
 });
 
+// Páginas web embebidas: nunca navegan a file:, javascript: u otros esquemas; las ventanas nuevas se abren como
+// pestañas del propio panel; sin descargas ni permisos (cámara, micrófono, ubicación, notificaciones).
+app.on('web-contents-created', (_e, contents) => {
+  if (contents.getType() !== 'webview') return;
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isWeb(url)) sendToWindow('browser:open-tab', contents.id, url);
+    return { action: 'deny' };
+  });
+  const guard = (e, url) => { if (!isWeb(url) && url !== 'about:blank') e.preventDefault(); };
+  contents.on('will-navigate', guard);
+  contents.on('will-redirect', guard);
+});
+
+ipcMain.handle('browser:openExternal', async (_e, url) => {
+  if (!isWeb(url)) return false;
+  await shell.openExternal(url);
+  return true;
+});
+
 app.whenReady().then(async () => {
+  const web = session.fromPartition(BROWSER_PARTITION);
+  web.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  web.setPermissionCheckHandler(() => false);
+  web.on('will-download', (ev, item) => { ev.preventDefault(); sendToWindow('browser:blocked', `Descarga bloqueada: ${item.getFilename()}`); });
   // Sin menú de aplicación: sus aceleradores (Ctrl+W, Ctrl+R, F12…) chocarían con los atajos del lienzo y de los terminales.
   Menu.setApplicationMenu(null);
   try {

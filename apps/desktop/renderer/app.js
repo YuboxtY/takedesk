@@ -129,6 +129,7 @@
     ['Ctrl+Shift+T', 'Nuevo terminal'],
     ['Ctrl+Shift+A', 'Nuevo panel de agente (el primer modelo disponible)'],
     ['Ctrl+Shift+N', 'Nueva nota'],
+    ['Ctrl+Shift+B', 'Nuevo navegador'],
     ['Ctrl+Shift+W', 'Cerrar el panel enfocado'],
     ['Ctrl+Shift+S', 'Nuevo espacio'],
     ['Ctrl+Alt+1 … 9', 'Ir al espacio 1 … 9'],
@@ -165,6 +166,7 @@
           break;
         }
         case 'KeyN': AIW.openTile('notes', {}); break;
+        case 'KeyB': AIW.openTile('browser', {}); break;
         case 'KeyW': { const f = canvas.focused(); if (f) canvas.remove(f, 'close'); break; }
         case 'KeyS': addSpace(); break;
         default: handled = false;
@@ -232,11 +234,15 @@
     for (const a of adapters.filter((x) => ['claude', 'opencode'].includes(x.id))) {
       items.push(btn(`＋ ${a.displayName} (CLI)`, `cli:${a.id}`, 'Sesión interactiva en su propio terminal', () => AIW.openTile('terminal', { label: `${a.displayName} (CLI)`, autorun: a.id })));
     }
+    items.push(btn('＋ Navegador', 'browser', 'Ctrl+Shift+B', () => AIW.openTile('browser', {})));
     items.push(btn('＋ Notas', 'notes', 'Ctrl+Shift+N', () => AIW.openTile('notes', {})));
     items.push(h('button', { className: 'help-btn', textContent: '⌨ Atajos', title: 'F1', on: { click: () => toggleHelp() } }));
     tb.replaceChildren(...items);
   }
 
+  // las páginas del navegador piden abrir ventanas nuevas: se abren como pestañas del panel que las originó
+  api.browser.onOpenTab((sourceId, url) => { for (const b of AIW.browsers) if (b.owns(sourceId)) { b.open(url); break; } });
+  api.browser.onBlocked((message) => { $('top-msg').textContent = message; setTimeout(() => { $('top-msg').textContent = ''; }, 5000); });
   api.term.onData((id, data) => { const t = AIW.terms.get(id); if (t) t.write(data); });
   api.term.onExit((id, code) => { const t = AIW.terms.get(id); if (t) t.exit(code); });
 

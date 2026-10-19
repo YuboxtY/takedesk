@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import http from 'node:http';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const desktop = path.resolve(here, '..');
@@ -29,6 +30,15 @@ for (const a of [['init', '-q', '-b', 'main'], ['-c', 'user.name=t', '-c', 'user
 const SEED_IMG = 'abcdef0123456789.png';
 fs.mkdirSync(path.join(userData, 'backgrounds'), { recursive: true });
 fs.writeFileSync(path.join(userData, 'backgrounds', SEED_IMG), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'));
+
+// servidor web local para probar el panel Navegador
+const web = http.createServer((req, res) => {
+  const p = req.url.split('?')[0];
+  res.setHeader('content-type', 'text/html; charset=utf-8');
+  res.end(p === '/two' ? '<title>Dos</title><h1>dos</h1>' : '<title>Hola E2E</title><a id="l" target="_blank" href="/two">abrir</a>');
+});
+await new Promise((r) => web.listen(0, '127.0.0.1', r));
+const WEBPORT = web.address().port;
 
 const env = { ...process.env, AIW_DATA_DIR: dataDir, AIW_PORT: String(PORT), AIW_ENABLE_FAKE: '1', AIW_RESERVE_MEM_GB: '0', AIW_MIN_FREE_DISK_GB: '0' };
 delete env.ELECTRON_RUN_AS_NODE;
@@ -159,7 +169,7 @@ try {
     const shot = await page.send('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(process.env.E2E_SHOT, Buffer.from(shot.result.data, 'base64'));
   }
-  check('el layout tiene los 7 paneles esperados', layoutBefore.total === 7, String(layoutBefore.total));
+  check('el layout tiene los 7 paneles esperados', layoutBefore.total === 7, `${layoutBefore.total}: ` + await page.evaluate("[...document.querySelectorAll('.tile')].map(t => t.dataset.type + ':' + t.querySelector('.tile-title').textContent).join(' | ')"));
 
   // ---- espacios y atajos de teclado
   const key = (code, m = {}) => page.evaluate(`(() => { const e = new KeyboardEvent('keydown', { code: ${JSON.stringify(code)}, key: ${JSON.stringify(code)}, bubbles: true, cancelable: true, ctrlKey: ${!!m.ctrl}, shiftKey: ${!!m.shift}, altKey: ${!!m.alt} }); document.body.dispatchEvent(e); return e.defaultPrevented; })()`);
@@ -256,6 +266,24 @@ try {
   check('cada espacio tiene su propio fondo (el 2 sigue con puntos)', await waitFor(async () => (await bgClass()) === 'bg-dots'));
   await key('Digit1', { ctrl: true, alt: true });
   check('al volver al espacio 1 regresa su imagen', await waitFor(async () => (await bgClass()) === 'bg-image'));
+  // ---- navegador con pestañas (webview aislado)
+  const brTabs = () => page.evaluate("[...document.querySelectorAll('.tile[data-type=browser] .br-tab')].map(t => ({ title: t.querySelector('.br-tab-title').textContent, active: t.classList.contains('active') }))");
+  const brGo = (u) => page.evaluate(`(() => { const i = document.querySelector('.tile[data-type=browser] .br-url'); i.value = ${JSON.stringify(u)}; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()`);
+  const activeView = "[...document.querySelectorAll('.tile[data-type=browser] webview')].filter(v => v.style.display !== 'none')[0]";
+  await click(page, '[data-add="browser"]');
+  check('se abre un panel de navegador con una pestaña', await waitFor(async () => (await countTiles(page, 'browser')) === 1 && (await brTabs()).length === 1));
+  await brGo(`127.0.0.1:${WEBPORT}/`);
+  check('navega a una página local y muestra su título en la pestaña', await waitFor(async () => (await brTabs())[0]?.title === 'Hola E2E'));
+  check('la página corre en un webview con perfil propio', await page.evaluate(`(() => { const v = ${activeView}; return v.getAttribute('partition') === 'persist:aiw-browser' && v.getURL().startsWith('http://127.0.0.1'); })()`));
+  check('un enlace target=_blank se abre como pestaña nueva del mismo panel', await waitFor(async () => { await page.evaluate(`${activeView}.executeJavaScript("document.getElementById('l').click()")`); return true; }) && await waitFor(async () => { const t = await brTabs(); return t.length === 2 && t[1].active && t[1].title === 'Dos'; }));
+  await brGo('file:///C:/Windows/win.ini');
+  check('file: se rechaza en la barra de direcciones', await waitFor(() => page.evaluate("!document.querySelector('.tile[data-type=browser] .br-msg').hidden")));
+  await brGo('javascript:alert(1)');
+  await page.evaluate(`${activeView}.executeJavaScript("location.href = 'file:///C:/Windows/win.ini'")`);
+  await sleep(1500);
+  check('ni la barra ni la propia página pueden llevar el webview a file: o javascript:', (await page.evaluate(`${activeView}.getURL()`)).startsWith('http://127.0.0.1') && (await brTabs()).length === 2);
+  await page.evaluate("document.querySelectorAll('.tile[data-type=browser] .br-tab')[0].click()");
+  check('cambiar de pestaña muestra la otra página', await waitFor(async () => (await brTabs())[0].active) && (await page.evaluate(`${activeView}.getURL()`)).endsWith('/'));
   await sleep(1200); // guardado del layout con espacios y de la cámara
 
   // ---- cierre normal de la ventana (CA-03)
@@ -270,14 +298,15 @@ try {
   // ================================================================= 2ª ejecución: restauración
   app2 = launch(9334);
   page = await connect(9334);
-  check('se restauran los 8 paneles (7 + la nota del espacio 2)', await waitFor(async () => (await page.evaluate("document.querySelectorAll('.tile').length")) === 8));
-  check('se restauran los espacios, su nombre y el espacio activo', await waitFor(async () => { const t = await tabs(); return t.length === 2 && t[0].name === 'Espacio 1' && t[1].name === 'Docs' && t[0].active && (await visibleCount()) === 7; }));
+  check('se restauran los 9 paneles (7 + la nota del espacio 2 + el navegador)', await waitFor(async () => (await page.evaluate("document.querySelectorAll('.tile').length")) === 9));
+  check('el navegador restaura sus pestañas (y recarga sus páginas)', await waitFor(async () => { const t = await brTabs(); return t.length === 2 && t[0].title === 'Hola E2E' && t[1].title === 'Dos' && t[0].active; }), JSON.stringify(await brTabs()));
+  check('se restauran los espacios, su nombre y el espacio activo', await waitFor(async () => { const t = await tabs(); return t.length === 2 && t[0].name === 'Espacio 1' && t[1].name === 'Docs' && t[0].active && (await visibleCount()) === 8; }));
   check('la cámara (zoom y posición) del espacio se restaura', await waitFor(async () => Math.abs((await cam()).k - globalThis.savedK) < 0.01), `${(await cam()).label}`);
   check('el fondo (imagen) y el tema claro se restauran tras reabrir', await waitFor(async () => (await bgClass()) === 'bg-image' && (await page.evaluate("document.documentElement.getAttribute('data-theme')")) === 'light'));
   await key('Digit2', { ctrl: true, alt: true });
   check('el espacio 2 conserva su nota con texto', await waitFor(async () => (await visibleCount()) === 1 && (await inTile(page, 'notes', 1, '.notes-area', "if (e.value !== 'nota del espacio 2') throw new Error('x')"))));
   await key('Digit1', { ctrl: true, alt: true });
-  await waitFor(async () => (await visibleCount()) === 7);
+  await waitFor(async () => (await visibleCount()) === 8);
   const after = { term0: await rect(page, 'terminal', 0), agent0: await rect(page, 'agent', 0) };
   check('se restauran posiciones y tamaños', JSON.stringify(after) === JSON.stringify({ term0: layoutBefore.term0, agent0: layoutBefore.agent0 }), JSON.stringify(after));
   check('las notas conservan su texto', await waitFor(async () => (await inTile(page, 'notes', 0, '.notes-area', "if (e.value !== 'recordatorio persistente') throw new Error('x')"))));
@@ -292,7 +321,7 @@ try {
   await page.evaluate("document.querySelectorAll('.space-tab')[1].querySelector('.space-close').click()");
   check('cerrar un espacio con paneles pide confirmar', await waitFor(async () => (await page.evaluate("document.querySelector('.space-close.armed')?.textContent ?? ''")).includes('¿Cerrar')) && (await tabs()).length === 2);
   await page.evaluate("document.querySelector('.space-close.armed').click()");
-  check('al confirmar se cierra el espacio y sus paneles', await waitFor(async () => (await tabs()).length === 1 && (await totalCount()) === 6), `${(await tabs()).length} espacios, ${await totalCount()} paneles`);
+  check('al confirmar se cierra el espacio y sus paneles', await waitFor(async () => (await tabs()).length === 1 && (await totalCount()) === 7), `${(await tabs()).length} espacios, ${await totalCount()} paneles`);
   page.close();
 } catch (e) {
   check('ejecución sin excepciones', false, String(e.message || e));
@@ -304,6 +333,7 @@ try {
     console.log(`Core de la prueba detenido (${pids.length})`);
   } catch { /* nada */ }
   await sleep(1000);
+  try { web.close(); } catch { /* ya cerrado */ }
   try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); } catch { /* temporal */ }
 }
 const failed = results.filter((r) => !r.ok).length;
