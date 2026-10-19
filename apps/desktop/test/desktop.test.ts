@@ -97,3 +97,26 @@ describe('workspace (sanitizado)', () => {
     expect(sanitizeWorkspace('x')).toEqual({});
   });
 });
+
+describe('workspace: espacios', () => {
+  const { sanitizeWorkspace } = require('../src/workspace.cjs');
+  it('conserva espacios válidos, sin duplicados, con nombre acotado y el espacio activo', () => {
+    const w = sanitizeWorkspace({
+      spaces: [{ id: 's1', name: '  Principal  ' }, { id: 's1', name: 'dup' }, { id: '../x', name: 'malo' }, { id: 's2', name: 'x'.repeat(100) }, { id: 's3' }, 5],
+      activeSpace: 's2',
+      layout: [{ type: 'notes', space: 's2' }, { type: 'notes', space: '../../etc' }],
+    });
+    expect(w.spaces.map((s: { id: string }) => s.id)).toEqual(['s1', 's2', 's3']);
+    expect(w.spaces[0].name).toBe('Principal');
+    expect(w.spaces[1].name).toHaveLength(40);
+    expect(w.spaces[2].name).toBe('Espacio');
+    expect(w.activeSpace).toBe('s2');
+    expect(w.layout[0].space).toBe('s2');
+    expect(w.layout[1].space).toBeUndefined();
+  });
+  it('limita el número de espacios y rechaza un activo inválido', () => {
+    const spaces = Array.from({ length: 50 }, (_, i) => ({ id: `s${i}`, name: `E${i}` }));
+    expect(sanitizeWorkspace({ spaces }).spaces).toHaveLength(12);
+    expect('activeSpace' in sanitizeWorkspace({ activeSpace: '../x' })).toBe(false);
+  });
+});

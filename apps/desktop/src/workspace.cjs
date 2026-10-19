@@ -3,6 +3,8 @@
 const TYPES = new Set(['terminal', 'agent', 'review', 'notes']);
 const MAX_TILES = 40;
 const MAX_STR = 20000;
+const MAX_SPACES = 12;
+const ID = /^[\w-]{1,60}$/;
 
 const num = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : d);
 
@@ -22,12 +24,21 @@ function sanitizeWorkspace(w) {
   const out = {};
   if (!w || typeof w !== 'object') return out;
   if (typeof w.projectId === 'string' && w.projectId.length < 200) out.projectId = w.projectId;
+  if (Array.isArray(w.spaces)) {
+    const seen = new Set();
+    out.spaces = w.spaces
+      .filter((sp) => sp && typeof sp === 'object' && typeof sp.id === 'string' && ID.test(sp.id) && !seen.has(sp.id) && seen.add(sp.id))
+      .slice(0, MAX_SPACES)
+      .map((sp) => ({ id: sp.id, name: (typeof sp.name === 'string' ? sp.name.trim() : '').slice(0, 40) || 'Espacio' }));
+  }
+  if (typeof w.activeSpace === 'string' && ID.test(w.activeSpace)) out.activeSpace = w.activeSpace;
   if (Array.isArray(w.layout)) {
     out.layout = w.layout
       .filter((t) => t && typeof t === 'object' && TYPES.has(t.type))
       .slice(0, MAX_TILES)
       .map((t) => ({
-        id: typeof t.id === 'string' && /^[\w-]{1,60}$/.test(t.id) ? t.id : undefined,
+        id: typeof t.id === 'string' && ID.test(t.id) ? t.id : undefined,
+        space: typeof t.space === 'string' && ID.test(t.space) ? t.space : undefined,
         type: t.type,
         x: num(t.x, 0, 20000, 20),
         y: num(t.y, 0, 20000, 20),

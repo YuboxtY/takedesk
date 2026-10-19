@@ -155,6 +155,34 @@ try {
   }
   check('el layout tiene los 7 paneles esperados', layoutBefore.total === 7, String(layoutBefore.total));
 
+  // ---- espacios y atajos de teclado
+  const key = (code, m = {}) => page.evaluate(`(() => { const e = new KeyboardEvent('keydown', { code: ${JSON.stringify(code)}, key: ${JSON.stringify(code)}, bubbles: true, cancelable: true, ctrlKey: ${!!m.ctrl}, shiftKey: ${!!m.shift}, altKey: ${!!m.alt} }); document.body.dispatchEvent(e); return e.defaultPrevented; })()`);
+  const visibleCount = () => page.evaluate("[...document.querySelectorAll('.tile')].filter(t => t.offsetParent !== null).length");
+  const tabs = () => page.evaluate("[...document.querySelectorAll('.space-tab')].map(t => ({ name: t.querySelector('.space-name, .space-rename')?.textContent || '', active: t.classList.contains('active'), count: t.querySelector('.space-count').textContent }))");
+  const totalCount = () => page.evaluate("document.querySelectorAll('.tile').length");
+  check('hay un único espacio con los 7 paneles visibles', (await tabs()).length === 1 && (await visibleCount()) === 7);
+  check('Ctrl+Shift+S crea un espacio vacío y lo activa', (await key('KeyS', { ctrl: true, shift: true })) && await waitFor(async () => { const t = await tabs(); return t.length === 2 && t[1].active && (await visibleCount()) === 0; }));
+  check('Ctrl+Shift+N crea una nota solo en el espacio activo', (await key('KeyN', { ctrl: true, shift: true })) && await waitFor(async () => (await visibleCount()) === 1 && (await totalCount()) === 8 && (await tabs()).map((t) => t.count).join() === '7,1'));
+  await page.evaluate("document.querySelectorAll('.tile[data-type=notes] .notes-area')[1].value = 'nota del espacio 2'; document.querySelectorAll('.tile[data-type=notes] .notes-area')[1].dispatchEvent(new Event('input'))");
+  // renombrar con doble clic
+  await page.evaluate("document.querySelectorAll('.space-tab')[1].querySelector('.space-name').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))");
+  await page.evaluate("(() => { const i = document.querySelector('.space-rename'); i.value = 'Docs'; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()");
+  check('doble clic renombra el espacio', await waitFor(async () => (await tabs())[1]?.name === 'Docs'));
+  check('Ctrl+Alt+1 vuelve al espacio 1 con sus 7 paneles (los terminales siguen vivos ocultos)', (await key('Digit1', { ctrl: true, alt: true })) && await waitFor(async () => (await tabs())[0].active && (await visibleCount()) === 7) && (await termIds(page)).length === 2);
+  check('Ctrl+Alt+→ y ← cambian de espacio', (await key('ArrowRight', { ctrl: true, alt: true })) && await waitFor(async () => (await tabs())[1].active) && (await key('ArrowLeft', { ctrl: true, alt: true })) && await waitFor(async () => (await tabs())[0].active));
+  const focusedId = () => page.evaluate("document.querySelector('.tile.focused')?.dataset.tileId ?? ''");
+  const f0 = await focusedId();
+  await key('ArrowDown', { ctrl: true, alt: true });
+  const f1 = await focusedId();
+  await key('ArrowUp', { ctrl: true, alt: true });
+  check('Ctrl+Alt+↑/↓ mueven el foco entre paneles', f0 !== '' && f1 !== '' && f0 !== f1 && (await focusedId()) === f0);
+  await key('KeyN', { ctrl: true, shift: true });
+  await waitFor(async () => (await totalCount()) === 9);
+  check('Ctrl+Shift+W cierra el panel enfocado', (await key('KeyW', { ctrl: true, shift: true })) && await waitFor(async () => (await totalCount()) === 8));
+  await key('F1');
+  check('F1 muestra la ayuda de atajos y Escape la cierra', (await page.evaluate("!document.getElementById('help').hidden && document.getElementById('help').textContent.includes('Ctrl+Shift+T')")) && (await key('Escape')) === false && await waitFor(() => page.evaluate("document.getElementById('help').hidden")));
+  await sleep(1200); // guardado del layout con espacios
+
   // ---- cierre normal de la ventana (CA-03)
   await Promise.race([page.evaluate('window.close()'), sleep(1000)]).catch(() => {});
   page.close();
@@ -167,7 +195,12 @@ try {
   // ================================================================= 2ª ejecución: restauración
   app2 = launch(9334);
   page = await connect(9334);
-  check('se restauran los 7 paneles', await waitFor(async () => (await page.evaluate("document.querySelectorAll('.tile').length")) === 7));
+  check('se restauran los 8 paneles (7 + la nota del espacio 2)', await waitFor(async () => (await page.evaluate("document.querySelectorAll('.tile').length")) === 8));
+  check('se restauran los espacios, su nombre y el espacio activo', await waitFor(async () => { const t = await tabs(); return t.length === 2 && t[0].name === 'Espacio 1' && t[1].name === 'Docs' && t[0].active && (await visibleCount()) === 7; }));
+  await key('Digit2', { ctrl: true, alt: true });
+  check('el espacio 2 conserva su nota con texto', await waitFor(async () => (await visibleCount()) === 1 && (await inTile(page, 'notes', 1, '.notes-area', "if (e.value !== 'nota del espacio 2') throw new Error('x')"))));
+  await key('Digit1', { ctrl: true, alt: true });
+  await waitFor(async () => (await visibleCount()) === 7);
   const after = { term0: await rect(page, 'terminal', 0), agent0: await rect(page, 'agent', 0) };
   check('se restauran posiciones y tamaños', JSON.stringify(after) === JSON.stringify({ term0: layoutBefore.term0, agent0: layoutBefore.agent0 }), JSON.stringify(after));
   check('las notas conservan su texto', await waitFor(async () => (await inTile(page, 'notes', 0, '.notes-area', "if (e.value !== 'recordatorio persistente') throw new Error('x')"))));
@@ -178,6 +211,11 @@ try {
   check('los paneles de agente recuperan su estado y salida', await waitFor(async () => (await tileText(page, 'agent', 0, '.agent-status')).includes('completed') && (await tileText(page, 'agent', 0, '.agent-out')).includes('hola desde fake')));
   await inTile(page, 'terminal', 0, '.tile-close', 'e.click()');
   check('cerrar un panel de terminal cierra su sesión en el Core', await waitFor(async () => (await termIds(page)).length === 1 && (await countTiles(page, 'terminal')) === 1));
+  // cerrar un espacio con paneles pide confirmación (segundo clic) y quita sus paneles
+  await page.evaluate("document.querySelectorAll('.space-tab')[1].querySelector('.space-close').click()");
+  check('cerrar un espacio con paneles pide confirmar', await waitFor(async () => (await page.evaluate("document.querySelector('.space-close.armed')?.textContent ?? ''")).includes('¿Cerrar')) && (await tabs()).length === 2);
+  await page.evaluate("document.querySelector('.space-close.armed').click()");
+  check('al confirmar se cierra el espacio y sus paneles', await waitFor(async () => (await tabs()).length === 1 && (await totalCount()) === 6), `${(await tabs()).length} espacios, ${await totalCount()} paneles`);
   page.close();
 } catch (e) {
   check('ejecución sin excepciones', false, String(e.message || e));

@@ -48,3 +48,21 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .review-patch .del { color: var(--bad); }
 .review-patch .hunk { color: var(--accent); }
 .notes-area { flex: 1; width: 100%; resize: none; background: color-mix(in srgb, #d8c6ff 18%, transparent); }
+.tile.other-space { display: none; }
+
+#spaces { display: flex; gap: 4px; align-items: center; padding: 6px 14px 0; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; }
+.space-tab { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--line); border-bottom: none; border-radius: 8px 8px 0 0; cursor: pointer; color: var(--muted); white-space: nowrap; }
+.space-tab:hover { color: var(--fg); }
+.space-tab.active { background: var(--bg); color: var(--fg); border-color: var(--accent); font-weight: 600; }
+.space-count { font-size: 11px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 22%, transparent); }
+.space-close { border: none; padding: 0 4px; line-height: 1; color: var(--muted); }
+.space-close:hover { color: var(--bad); }
+.space-close.armed { color: #fff; background: var(--bad); border-radius: 4px; padding: 1px 8px; font-size: 12px; }
+.space-rename { font: inherit; width: 140px; padding: 0 4px; border: 1px solid var(--accent); border-radius: 4px; background: var(--bg); color: var(--fg); }
+.space-add { border-style: dashed; margin-bottom: 4px; }
+.help-btn { margin-left: auto; }
+#help { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); }
+.help-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 24px; min-width: 420px; }
+.help-card h2 { margin: 0 0 10px; font-size: 15px; }
+.help-card td { padding: 4px 10px 4px 0; }
+kbd { font: 12px Consolas, monospace; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); }

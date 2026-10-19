@@ -1,7 +1,7 @@
 'use strict';
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron');
 const { createProxy } = require('./api-proxy.cjs');
 const { ensureCore } = require('./core-launcher.cjs');
 const { createTerminalBridge } = require('./terminal-bridge.cjs');
@@ -80,6 +80,8 @@ ipcMain.handle('dialog:pickFolder', async () => {
 });
 
 app.whenReady().then(async () => {
+  // Sin menú de aplicación: sus aceleradores (Ctrl+W, Ctrl+R, F12…) chocarían con los atajos del lienzo y de los terminales.
+  Menu.setApplicationMenu(null);
   try {
     const core = await ensureCore({ port: Number(process.env.AIW_PORT) || undefined });
     request = createProxy({ port: core.port, token: core.token });

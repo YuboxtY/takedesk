@@ -38,6 +38,8 @@
     const entries = new Map(); // id -> { tile, frame, body, titleEl, actionsEl, inst }
     let zTop = 1;
     let seq = 0;
+    let activeSpace = null; // espacio visible; los paneles de otros espacios siguen vivos pero ocultos
+    let focusedId = null;
     let timer = null;
     const changed = () => {
       clearTimeout(timer);
@@ -55,6 +57,7 @@
     function focus(id) {
       const e = entries.get(id);
       if (!e) return;
+      focusedId = id;
       for (const o of entries.values()) o.frame.classList.toggle('focused', o === e);
       if (e.tile.z !== zTop) {
         e.tile.z = ++zTop;
@@ -103,11 +106,11 @@
     }
 
     /** Primer hueco sin solapar (recorriendo el área visible por filas); si no hay, en cascada. */
-    function freeSpot(w, h) {
+    function freeSpot(w, h, space) {
       const scroller = root.parentElement;
       const maxX = Math.max(w + 40, (scroller ? scroller.clientWidth : 1200) - 20);
       const maxY = Math.max(h + 40, 8000);
-      const rects = [...entries.values()].map(({ tile }) => tile);
+      const rects = [...entries.values()].map(({ tile }) => tile).filter((t) => t.space === space);
       const free = (x, y) => rects.every((r) => x + w + 10 <= r.x || r.x + r.w + 10 <= x || y + h + 10 <= r.y || r.y + r.h + 10 <= y);
       for (let y = 20; y + h <= maxY; y += 20) for (let x = 20; x + w <= maxX; x += 20) if (free(x, y)) return { x, y };
       const n = rects.length;
@@ -127,9 +130,10 @@
         h: Math.max(MIN_H, input.h || dh),
         z: input.z || ++zTop,
         state: { ...(input.state || {}) },
+        space: input.space || activeSpace,
       };
       if (!Number.isFinite(tile.x) || !Number.isFinite(tile.y)) {
-        const spot = freeSpot(tile.w, tile.h);
+        const spot = freeSpot(tile.w, tile.h, tile.space);
         tile.x = spot.x;
         tile.y = spot.y;
       }
@@ -145,6 +149,7 @@
       ent.frame = frame;
       ent.body = body;
       place(frame, tile);
+      frame.classList.toggle('other-space', tile.space !== activeSpace);
       root.append(frame);
       entries.set(tile.id, ent);
       const ctx = {
@@ -161,7 +166,7 @@
         raf = requestAnimationFrame(() => ent.inst.onResize && ent.inst.onResize());
       });
       ent.ro.observe(body);
-      focus(tile.id);
+      if (tile.space === activeSpace) focus(tile.id);
       changed();
       return tile.id;
     }
@@ -170,21 +175,50 @@
       const ent = entries.get(id);
       if (!ent) return;
       entries.delete(id);
+      if (focusedId === id) focusedId = null;
       try { ent.ro.disconnect(); } catch { /* ya liberado */ }
       try { ent.inst.destroy && ent.inst.destroy(reason); } catch { /* el panel ya no existe */ }
       ent.frame.remove();
       changed();
     }
 
+    const inSpace = (space) => [...entries.values()].filter((e) => e.tile.space === space);
+
+    function setActiveSpace(space) {
+      activeSpace = space;
+      for (const e of entries.values()) e.frame.classList.toggle('other-space', e.tile.space !== space);
+      const vis = inSpace(space);
+      const top = vis.sort((a, b) => b.tile.z - a.tile.z)[0];
+      focusedId = null;
+      for (const e of entries.values()) e.frame.classList.remove('focused');
+      if (top) focus(top.tile.id);
+      changed();
+    }
+
+    /** Foco al panel siguiente (+1) o anterior (-1) del espacio activo, en orden de creación. */
+    function cycleFocus(dir) {
+      const list = inSpace(activeSpace);
+      if (!list.length) return;
+      const i = list.findIndex((e) => e.tile.id === focusedId);
+      const next = list[(i + dir + list.length) % list.length];
+      focus(next.tile.id);
+    }
+
     return {
       add,
       remove,
       focus,
+      setActiveSpace,
+      cycleFocus,
+      focused: () => focusedId,
+      countIn: (space) => inSpace(space).length,
+      /** Cierra todos los paneles de un espacio (los terminales se cierran en el Core). */
+      removeSpace: (space) => { for (const e of inSpace(space)) remove(e.tile.id, 'close'); },
       has: (id) => entries.has(id),
       find: (type, pred) => [...entries.values()].find((e) => e.tile.type === type && (!pred || pred(e.tile)))?.tile.id,
       /** Se llama al cerrar la app: libera sin matar nada en el Core. */
       disposeAll: () => { for (const id of [...entries.keys()]) remove(id, 'dispose'); },
-      serialize: () => [...entries.values()].map(({ tile }) => ({ id: tile.id, type: tile.type, x: tile.x, y: tile.y, w: tile.w, h: tile.h, z: tile.z, state: { ...tile.state } })),
+      serialize: () => [...entries.values()].map(({ tile }) => ({ id: tile.id, type: tile.type, x: tile.x, y: tile.y, w: tile.w, h: tile.h, z: tile.z, space: tile.space, state: { ...tile.state } })),
       instances: () => [...entries.values()].map((e) => e.inst),
     };
   };
