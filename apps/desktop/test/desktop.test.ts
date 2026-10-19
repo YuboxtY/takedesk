@@ -13,6 +13,9 @@ describe('api-proxy', () => {
     expect(isAllowed('GET', '/v1/runs')).toBe(true);
     expect(isAllowed('GET', '/v1/runs/run_1/events?since=3&limit=200')).toBe(true);
     expect(isAllowed('POST', '/v1/runs/run_1/cancel')).toBe(true);
+    expect(isAllowed('GET', '/v1/runs/run_1/diff')).toBe(true);
+    expect(isAllowed('POST', '/v1/runs/run_1/merge')).toBe(true);
+    expect(isAllowed('GET', '/v1/runs/run_1/merge/x')).toBe(false);
     expect(isAllowed('DELETE', '/v1/runs')).toBe(false);
     expect(isAllowed('GET', '/v1/terminals')).toBe(false);
     expect(isAllowed('POST', '/v1/ws-ticket')).toBe(false);

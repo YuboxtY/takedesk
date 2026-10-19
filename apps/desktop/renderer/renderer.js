@@ -94,6 +94,16 @@ async function loadRuns() {
       });
       td.appendChild(b);
     }
+    if (run.mode === 'write' && run.state === 'completed' && run.worktreeStatus === 'active') {
+      const b = Object.assign(document.createElement('button'), { textContent: 'Revisar cambios' });
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openReview(run.id, run.title || run.adapter);
+      });
+      td.appendChild(b);
+    } else if (run.worktreeStatus === 'merged') {
+      td.appendChild(Object.assign(document.createElement('span'), { className: 'muted', textContent: 'fusionado' }));
+    }
     tr.appendChild(td);
     tr.addEventListener('click', () => selectRun(run.id, run.title || run.adapter));
     return tr;
@@ -137,6 +147,63 @@ async function pollOutput() {
     $('output').textContent = errText(r);
   }
 }
+
+// ------------------------------------------------------------ revisión de cambios y fusión (CA-04)
+let review = null; // { runId, reviewedHead }
+
+function renderPatch(patch) {
+  const frag = document.createDocumentFragment();
+  for (const line of patch.split('\n')) {
+    const cls = line.startsWith('+++') || line.startsWith('---') ? '' : line.startsWith('+') ? 'add' : line.startsWith('-') ? 'del' : line.startsWith('@@') ? 'hunk' : '';
+    frag.appendChild(Object.assign(document.createElement('span'), { className: cls, textContent: line + '\n' }));
+  }
+  return frag;
+}
+
+async function openReview(runId, title) {
+  const panel = $('review');
+  panel.hidden = false;
+  $('review-title').textContent = '· ' + title;
+  setMsg($('review-msg'), 'Cargando diff…');
+  $('review-patch').replaceChildren();
+  $('review-merge').disabled = true;
+  review = null;
+  const r = await api.request('GET', `/v1/runs/${runId}/diff`);
+  if (r.status !== 200) {
+    setMsg($('review-msg'), errText(r), true);
+    return;
+  }
+  const d = r.body;
+  review = { runId, reviewedHead: d.reviewedHead };
+  setMsg($('review-msg'), '');
+  $('review-summary').textContent = d.files.length
+    ? `${d.files.length} archivo(s): ` + d.files.map((f) => `${f.status} ${f.path}`).join(', ')
+    : 'El agente no hizo cambios.';
+  $('review-warn').hidden = !d.targetDirty && !d.truncated;
+  $('review-warn').textContent = d.targetDirty
+    ? 'El proyecto tiene cambios locales sin guardar: guarda o descarta esos cambios antes de fusionar.'
+    : d.truncated ? 'El diff es muy grande y se muestra truncado; revísalo completo antes de aprobar.' : '';
+  $('review-patch').replaceChildren(renderPatch(d.patch || ''));
+  $('review-merge').disabled = d.files.length === 0;
+  panel.scrollIntoView({ block: 'nearest' });
+}
+
+async function approveMerge() {
+  if (!review) return;
+  $('review-merge').disabled = true;
+  setMsg($('review-msg'), 'Fusionando…');
+  const r = await api.request('POST', `/v1/runs/${review.runId}/merge`, { approvedHead: review.reviewedHead });
+  if (r.status === 200) {
+    setMsg($('review-msg'), 'Fusionado en la rama principal.');
+    review = null;
+    await loadRuns();
+  } else {
+    setMsg($('review-msg'), errText(r), true);
+    $('review-merge').disabled = false;
+  }
+}
+$('review-merge').addEventListener('click', approveMerge);
+$('review-close').addEventListener('click', () => { $('review').hidden = true; review = null; });
 
 // ------------------------------------------------------------ terminal (xterm + puente IPC)
 let xt = null;

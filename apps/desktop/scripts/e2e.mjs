@@ -23,7 +23,7 @@ const check = (name, ok, detail = '') => { results.push({ name, ok }); console.l
 fs.mkdirSync(repo, { recursive: true });
 for (const a of [['init', '-q', '-b', 'main'], ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'i']]) execFileSync('git', a, { cwd: repo });
 
-const env = { ...process.env, AIW_DATA_DIR: dataDir, AIW_PORT: String(PORT) };
+const env = { ...process.env, AIW_DATA_DIR: dataDir, AIW_PORT: String(PORT), AIW_ENABLE_FAKE: '1', AIW_RESERVE_MEM_GB: '0', AIW_MIN_FREE_DISK_GB: '0' };
 delete env.ELECTRON_RUN_AS_NODE;
 const stop = (p) => { try { execFileSync('taskkill', ['/PID', String(p.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* ya cerrado */ } };
 const launch = (cdp) => spawn(electronBin, [desktop, `--remote-debugging-port=${cdp}`, `--user-data-dir=${userData}`], { env, stdio: ['ignore', fs.openSync(path.join(os.tmpdir(), 'aiw-e2e-electron.log'), 'a'), fs.openSync(path.join(os.tmpdir(), 'aiw-e2e-electron.log'), 'a')] });
@@ -73,6 +73,36 @@ try {
   check('el renderer no expone el token', !(await page.evaluate(`JSON.stringify(Object.keys(window.aiw))`)).includes('token') && direct.status === 200);
   const forbidden = await page.evaluate("window.aiw.request('GET','/v1/terminals').then(r=>r.status)");
   check('el renderer no puede llamar rutas fuera de la lista blanca', forbidden === 403, String(forbidden));
+  // ---- Revisión y fusión (CA-04) con el adaptador simulado: el "trabajo del agente" se escribe en su worktree.
+  const mkRun = (title) => page.evaluate(`window.aiw.request('POST','/v1/runs',{projectId:${JSON.stringify(prj.id)},adapter:'fake',prompt:'x',mode:'write',title:${JSON.stringify(title)}}).then(r=>r.body)`);
+  const runInfo = (id) => page.evaluate(`window.aiw.request('GET','/v1/runs/${id}').then(r=>r.body)`);
+  const finished = async (id) => waitFor(async () => { const r = await runInfo(id); return r.state === 'completed' && r.worktreePath ? r : false; }, 20000);
+  const created = await mkRun('cambio A');
+  const runA = await finished(created.id);
+  const runB = await finished((await mkRun('cambio B')).id);
+  fs.writeFileSync(path.join(runA.worktreePath, 'notas.txt'), 'linea del agente A\n');
+  fs.writeFileSync(path.join(runB.worktreePath, 'notas.txt'), 'linea del agente B\n');
+  const clickReview = async (title) => {
+    await page.evaluate("document.getElementById('review-close').click()");
+    return page.evaluate(`(() => { const row = [...document.querySelectorAll('#runs tr')].find(r => r.textContent.includes(${JSON.stringify(title)})); const b = row && [...row.querySelectorAll('button')].find(x => x.textContent === 'Revisar cambios'); if (!b) return false; b.click(); return true; })()`);
+  };
+  check('la lista muestra "Revisar cambios" para un run de escritura completado', await waitFor(() => clickReview('cambio A'), 20000));
+  check('la vista de diff muestra el cambio del agente', await waitFor(() => page.evaluate("document.getElementById('review-patch').textContent.includes('+linea del agente A')")));
+  check('aprobar y fusionar lleva el cambio a la rama principal', await (async () => {
+    await waitFor(() => page.evaluate("!document.getElementById('review-merge').disabled"));
+    await page.evaluate("document.getElementById('review-merge').click()");
+    return waitFor(() => fs.existsSync(path.join(repo, 'notas.txt')) && fs.readFileSync(path.join(repo, 'notas.txt'), 'utf8').replaceAll('\r\n', '\n') === 'linea del agente A\n', 15000);
+  })());
+  check('el run fusionado queda marcado y su worktree limpiado', await waitFor(async () => (await runInfo(runA.id)).worktreeStatus === 'merged') && await waitFor(() => !fs.existsSync(runA.worktreePath), 10000));
+  check('el segundo run (mismo archivo) abre su revisión', await waitFor(() => clickReview('cambio B'), 20000));
+  await waitFor(() => page.evaluate("!document.getElementById('review-merge').disabled"));
+  await page.evaluate("document.getElementById('review-merge').click()");
+  check('el conflicto se informa en la interfaz', await waitFor(() => page.evaluate("document.getElementById('review-msg').textContent.includes('Conflicto')")));
+  check('tras el conflicto: rama principal intacta y trabajo del agente a salvo',
+    fs.readFileSync(path.join(repo, 'notas.txt'), 'utf8').replaceAll('\r\n', '\n') === 'linea del agente A\n'
+    && fs.readFileSync(path.join(runB.worktreePath, 'notas.txt'), 'utf8').replaceAll('\r\n', '\n') === 'linea del agente B\n'
+    && execFileSync('git', ['status', '--porcelain'], { cwd: repo }).toString().trim() === '');
+
   // Cierre normal de la ventana (como el usuario): la app sale sola y el Core desacoplado sigue vivo.
   await Promise.race([page.evaluate('window.close()'), sleep(1000)]).catch(() => {});
   page.close();

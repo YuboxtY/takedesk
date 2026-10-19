@@ -25,3 +25,7 @@ pre { margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 6p
 .muted { color: var(--muted); text-transform: none; letter-spacing: 0; }
 [hidden] { display: none !important; }
 #term { height: 280px; border: 1px solid var(--line); border-radius: 6px; padding: 6px; background: #0d1117; }
+#review-patch .add { color: var(--ok); }
+#review-patch .del { color: var(--bad); }
+#review-patch .hunk { color: var(--accent); }
+#review-patch { max-height: 380px; font: 12px/1.4 Consolas, "Cascadia Mono", monospace; white-space: pre; word-break: normal; }

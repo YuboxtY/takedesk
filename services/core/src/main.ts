@@ -7,6 +7,7 @@ import { loadConfig } from './config';
 import { EventBus } from './event-bus';
 import { PtyManager } from './pty-manager';
 import { systemProbe } from './resources';
+import { MergeService } from './merge-service';
 import { RunManager } from './run-manager';
 import { buildServer } from './server';
 
@@ -28,9 +29,10 @@ async function main() {
 
   const pty = new PtyManager({ shell: cfg.shell, maxSessions: cfg.maxTerminals });
   const runs = new RunManager({ repos, bus, adapters, cfg, probe: systemProbe });
+  const merges = new MergeService({ repos, bus });
   const rec = await runs.reconcile();
 
-  const app = await buildServer({ cfg, repos, bus, runs, pty, adapters, token, probe: systemProbe, logger: true });
+  const app = await buildServer({ cfg, repos, bus, runs, merges, pty, adapters, token, probe: systemProbe, logger: true });
   await app.listen({ host: cfg.host, port: cfg.port });
   app.log.info({ reconcile: rec, dataDir: cfg.dataDir, tokenFile: path.join(cfg.dataDir, 'api-token') }, 'Core listo');
 

@@ -8,7 +8,7 @@ const ALLOWED = [
   /^\/v1\/diagnostics$/,
   /^\/v1\/projects$/,
   /^\/v1\/runs(\?[\w=&%.-]*)?$/,
-  /^\/v1\/runs\/[\w-]+(\/(cancel|events(\?[\w=&%.-]*)?))?$/,
+  /^\/v1\/runs\/[\w-]+(\/(cancel|diff|merge|events(\?[\w=&%.-]*)?))?$/,
   /^\/v1\/approvals(\?[\w=&%.-]*)?$/,
   /^\/v1\/approvals\/[\w-]+$/,
 ];

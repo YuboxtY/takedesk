@@ -106,6 +106,7 @@ export const CoreEventType = z.enum([
   'approval.resolved',
   'worktree.created',
   'worktree.removed',
+  'worktree.merged',
   'provider.paused',
   'system.degraded',
 ]);
@@ -182,6 +183,8 @@ export const RunDto = z.object({
   title: z.string().nullable(),
   worktreePath: z.string().nullable(),
   branch: z.string().nullable(),
+  /** active | merged | removed | orphaned; null si el run no tiene worktree. */
+  worktreeStatus: z.string().nullable(),
   createdAt: z.number(),
   startedAt: z.number().nullable(),
   endedAt: z.number().nullable(),
@@ -191,6 +194,11 @@ export const RunDto = z.object({
 export type RunDto = z.infer<typeof RunDto>;
 
 export const ApprovalDecisionBody = z.object({ decision: z.enum(['allow', 'deny']) });
+
+export const MergeBody = z.object({
+  /** Commit exacto que el usuario revisó (DiffReview.reviewedHead). */
+  approvedHead: z.string().regex(/^[0-9a-f]{7,64}$/),
+});
 
 export const CreateTerminalBody = z.object({
   projectId: z.string().min(1),

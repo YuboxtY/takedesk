@@ -6,6 +6,7 @@ import { git } from '@aiw/git-engine';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
+import { MergeService } from '../src/merge-service';
 import { PtyManager } from '../src/pty-manager';
 import { buildServer } from '../src/server';
 import { deferred, makeEnv, sleep, waitFor, type Env } from './helpers';
@@ -22,7 +23,7 @@ beforeEach(async () => {
   const runs = env.manager(adapters);
   pty = new PtyManager({ shell: env.cfg.shell, maxSessions: 3, exitedTtlMs: 200 });
   app = await buildServer({
-    cfg: env.cfg, repos: env.repos, bus: env.bus, runs, pty, adapters: new Map(adapters.map((a) => [a.id, a])), token: TOKEN, probe: env.probe,
+    cfg: env.cfg, repos: env.repos, bus: env.bus, runs, merges: new MergeService({ repos: env.repos, bus: env.bus }), pty, adapters: new Map(adapters.map((a) => [a.id, a])), token: TOKEN, probe: env.probe,
   });
   await app.listen({ host: '127.0.0.1', port: 0 });
   base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;

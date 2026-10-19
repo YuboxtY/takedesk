@@ -4,7 +4,7 @@ import fastifyWebsocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 import {
-  API_VERSION, ApprovalDecisionBody, CreateProjectBody, CreateRunBody, CreateTerminalBody, MIN_CLIENT_VERSION,
+  API_VERSION, ApprovalDecisionBody, CreateProjectBody, CreateRunBody, CreateTerminalBody, MergeBody, MIN_CLIENT_VERSION,
   SERVER_VERSION, TerminalClientMessage, type RunDto, type WsMessage,
 } from '@aiw/contracts';
 import { readRunEvents, type Repos, type RunRow } from '@aiw/database';
@@ -17,6 +17,7 @@ import { ApiError } from './errors';
 import type { EventBus } from './event-bus';
 import type { PtyManager } from './pty-manager';
 import type { ResourceProbe } from './resources';
+import type { MergeService } from './merge-service';
 import type { RunManager } from './run-manager';
 
 export interface ServerDeps {
@@ -24,6 +25,7 @@ export interface ServerDeps {
   repos: Repos;
   bus: EventBus;
   runs: RunManager;
+  merges: MergeService;
   pty: PtyManager;
   adapters: Map<string, AgentAdapter>;
   token: string;
@@ -45,7 +47,7 @@ function runDto(r: RunRow, repos: Repos): RunDto {
   const wt = r.worktreeId ? repos.worktrees.get(r.worktreeId) : undefined;
   return {
     id: r.id, projectId: r.projectId, adapter: r.adapter, mode: r.mode as RunDto['mode'], state: r.state as RunDto['state'],
-    title: r.title, worktreePath: wt?.path ?? null, branch: wt?.branch ?? null, createdAt: r.createdAt,
+    title: r.title, worktreePath: wt?.path ?? null, branch: wt?.branch ?? null, worktreeStatus: wt?.status ?? null, createdAt: r.createdAt,
     startedAt: r.startedAt, endedAt: r.endedAt, endReason: r.endReason, lastSeq: r.lastSeq,
   };
 }
@@ -56,7 +58,7 @@ function bearer(req: FastifyRequest): string | undefined {
 }
 
 export async function buildServer(d: ServerDeps): Promise<FastifyInstance> {
-  const { cfg, repos, bus, runs, pty, adapters } = d;
+  const { cfg, repos, bus, runs, merges, pty, adapters } = d;
   const tickets = new TicketStore();
   const startedAt = d.startedAt ?? Date.now();
 
@@ -158,6 +160,13 @@ export async function buildServer(d: ServerDeps): Promise<FastifyInstance> {
     const q = req.query as { since?: string; limit?: string };
     const limit = Math.min(Math.max(Number(q.limit ?? 200) || 200, 1), 1000);
     return { events: readRunEvents(path.join(r.runDir, 'events.ndjson'), Number(q.since ?? 0) || 0, limit) };
+  });
+
+  // --- Revisión y fusión del trabajo (CA-04): la fusión exige el commit exacto que se revisó.
+  app.get('/v1/runs/:id/diff', async (req) => merges.review((req.params as { id: string }).id));
+  app.post('/v1/runs/:id/merge', async (req) => {
+    const body = parse(MergeBody, req.body);
+    return merges.merge((req.params as { id: string }).id, body.approvedHead);
   });
 
   app.get('/v1/approvals', async (req) => {

@@ -16,7 +16,7 @@ export const worktree = sqliteTable(
     branch: text('branch').notNull(),
     path: text('path').notNull(),
     baseCommit: text('base_commit').notNull(),
-    /** active | removed | orphaned */
+    /** active | merged | removed | orphaned */
     status: text('status').notNull(),
     createdAt: integer('created_at').notNull(),
   },
