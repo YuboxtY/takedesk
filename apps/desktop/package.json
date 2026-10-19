@@ -8,5 +8,8 @@
   },
   "devDependencies": {
     "electron": "^39.0.0"
+  },
+  "dependencies": {
+    "@xterm/xterm": "5"
   }
 }

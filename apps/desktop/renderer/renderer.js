@@ -104,6 +104,7 @@ async function loadRuns() {
 function selectRun(id, title) {
   selectedRun = id;
   sinceSeq = 0;
+  if (typeof saveWorkspace === 'function') saveWorkspace();
   $('out-title').textContent = '· ' + title;
   $('output').textContent = '';
   pollOutput();
@@ -137,6 +138,92 @@ async function pollOutput() {
   }
 }
 
+// ------------------------------------------------------------ terminal (xterm + puente IPC)
+let xt = null;
+let currentTerm = null;
+
+function ensureXterm() {
+  if (xt) return xt;
+  xt = new window.Terminal({ cursorBlink: true, fontSize: 13, fontFamily: 'Consolas, "Cascadia Mono", monospace', theme: { background: '#0d1117' } });
+  xt.open($('term'));
+  xt.onData((d) => currentTerm && api.term.input(currentTerm, d));
+  xt.onResize(({ cols, rows }) => currentTerm && api.term.resize(currentTerm, cols, rows));
+  return xt;
+}
+
+async function refreshTerminals(selectId) {
+  const list = await api.term.list().catch(() => []);
+  const sel = $('term-select');
+  sel.replaceChildren(...list.filter((t) => !t.exited).map((t) => Object.assign(document.createElement('option'), { value: t.id, textContent: t.id })));
+  if (selectId && [...sel.options].some((o) => o.value === selectId)) sel.value = selectId;
+  return sel.value || null;
+}
+
+async function showTerminal(id) {
+  const t = ensureXterm();
+  t.reset();
+  currentTerm = id;
+  $('term-title').textContent = id ? '· ' + id : '';
+  if (id) {
+    await api.term.attach(id); // el Core reenvía el scrollback al reconectar
+    t.focus();
+    api.term.resize(id, t.cols, t.rows);
+  }
+  saveWorkspace();
+}
+
+async function newTerminal() {
+  const projectId = $('project').value;
+  if (!projectId) return setMsg($('term-msg'), 'Añade un proyecto primero.', true);
+  const t = ensureXterm();
+  try {
+    const info = await api.term.open(projectId, t.cols, t.rows);
+    setMsg($('term-msg'), '');
+    await refreshTerminals(info.id);
+    await showTerminal(info.id);
+  } catch (e) {
+    setMsg($('term-msg'), String(e.message || e), true);
+  }
+}
+
+async function killTerminal() {
+  const id = $('term-select').value;
+  if (!id) return;
+  await api.term.kill(id);
+  const next = await refreshTerminals();
+  await showTerminal(next);
+}
+
+api.term.onData((id, data) => { if (id === currentTerm && xt) xt.write(data); });
+api.term.onExit((id, code) => { if (id === currentTerm && xt) xt.write(`\r\n[el terminal terminó con código ${code}]\r\n`); });
+$('term-new').addEventListener('click', newTerminal);
+$('term-kill').addEventListener('click', killTerminal);
+$('term-select').addEventListener('change', () => showTerminal($('term-select').value || null));
+
+// ------------------------------------------------------------ workspace
+function saveWorkspace() {
+  api.workspace.save({
+    projectId: $('project').value || undefined,
+    runId: selectedRun || undefined,
+    terminalId: currentTerm || undefined,
+    adapter: $('adapter').value || undefined,
+    mode: $('mode').value || undefined,
+  });
+}
+
+async function restoreWorkspace() {
+  const w = await api.workspace.load();
+  if (w.projectId && [...$('project').options].some((o) => o.value === w.projectId)) $('project').value = w.projectId;
+  if (w.adapter && [...$('adapter').options].some((o) => o.value === w.adapter)) $('adapter').value = w.adapter;
+  if (w.mode) $('mode').value = w.mode;
+  updatePolicy();
+  if (w.runId) selectRun(w.runId, w.runId);
+  // CA-03: si el terminal sigue vivo en el Core, se reconecta con su scrollback.
+  const id = await refreshTerminals(w.terminalId);
+  if (id) await showTerminal(id);
+}
+for (const id of ['project', 'adapter', 'mode']) $(id).addEventListener('change', saveWorkspace);
+
 $('add-project').addEventListener('click', addProject);
 $('start').addEventListener('click', startRun);
 $('adapter').addEventListener('change', updatePolicy);
@@ -146,5 +233,6 @@ $('adapter').addEventListener('change', updatePolicy);
   await loadAdapters();
   await loadProjects();
   await loadRuns();
+  await restoreWorkspace();
   setInterval(() => { loadHealth(); loadRuns(); pollOutput(); }, 2000);
 })();

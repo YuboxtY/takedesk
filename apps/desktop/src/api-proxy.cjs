@@ -13,14 +13,17 @@ const ALLOWED = [
   /^\/v1\/approvals\/[\w-]+$/,
 ];
 const METHODS = new Set(['GET', 'POST']);
+// Rutas que solo usa el proceso principal (puente de terminales); nunca el renderer.
+const INTERNAL = [/^\/v1\/ws-ticket$/, /^\/v1\/terminals(\/[\w-]+)?$/];
 
 function isAllowed(method, pathAndQuery) {
   return METHODS.has(method) && ALLOWED.some((re) => re.test(pathAndQuery));
 }
 
-function createProxy({ port, token, fetchFn = fetch }) {
+function createProxy({ port, token, fetchFn = fetch, internal = false }) {
   return async function request(method, pathAndQuery, body) {
-    if (!isAllowed(method, pathAndQuery)) return { status: 403, body: { error: { code: 'forbidden', message: 'Ruta no permitida desde la interfaz' } } };
+    const ok = isAllowed(method, pathAndQuery) || (internal && ['GET', 'POST', 'DELETE'].includes(method) && INTERNAL.some((re) => re.test(pathAndQuery)));
+    if (!ok) return { status: 403, body: { error: { code: 'forbidden', message: 'Ruta no permitida desde la interfaz' } } };
     const res = await fetchFn(`http://127.0.0.1:${port}${pathAndQuery}`, {
       method,
       headers: { authorization: `Bearer ${token}`, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },

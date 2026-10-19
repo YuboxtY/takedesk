@@ -24,3 +24,4 @@ pre { margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 6p
 .msg.bad { color: var(--bad); }
 .muted { color: var(--muted); text-transform: none; letter-spacing: 0; }
 [hidden] { display: none !important; }
+#term { height: 280px; border: 1px solid var(--line); border-radius: 6px; padding: 6px; background: #0d1117; }

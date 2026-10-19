@@ -45,7 +45,7 @@ export async function makeEnv(over: Partial<CoreConfig> = {}): Promise<Env> {
 
   const cfg = loadConfig({ AIW_DATA_DIR: path.join(tmp, 'data') } as NodeJS.ProcessEnv, {
     minFreeDiskBytes: 0, reserveMemBytes: 0, cancelGraceMs: 300, quotaPauseMs: 400,
-    shell: { file: 'bash', args: ['--norc', '--noprofile'] }, ...over,
+    shell: process.platform === 'win32' ? { file: 'powershell.exe', args: ['-NoLogo', '-NoProfile'] } : { file: 'bash', args: ['--norc', '--noprofile'] }, ...over,
   });
   fs.mkdirSync(cfg.dataDir, { recursive: true });
   const database = openDatabase(cfg.dbFile);

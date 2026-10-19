@@ -136,3 +136,12 @@ Procedimiento: docs/11 parte B. Datos: `poc-report.md`. Veredicto: **Parcial** (
 * Registro del Core en `core.log` dentro de `%LOCALAPPDATA%\AIWorkspace`. El módulo `desktop` se añadió a `check:boundaries` sin dependencias internas (solo HTTP).
 * **Incidencia de instalación (Node 26):** el postinstall de Electron termina en silencio al extraer el zip (extract-zip). Se extrajo manualmente el zip oficial (sha256 verificado contra `checksums.json`) a `node_modules/.pnpm/electron@39.8.10/.../electron/dist` y se creó `path.txt`. En una instalación limpia habrá que repetirlo, o usar Node LTS (22/24) para `pnpm install`.
 * **No verificado:** aspecto visual y flujo completo de un run desde la interfaz (la ventana se abrió y las llamadas autenticadas al Core respondieron 200, pero no se probó interactuando).
+
+### Etapa 1 · cierre de pendientes de Electron · 2026-10-19
+* **Terminal integrada** (xterm.js 5 + `terminal-bridge.cjs`): el WebSocket y el ticket viven en el proceso principal; el renderer solo usa IPC. Cerrar la app solo suelta los sockets; los terminales siguen en el Core.
+* **Workspace** (`workspace.json` en userData): se restauran proyecto, agente, modo, run y terminal seleccionados.
+* **E2E real** (`node apps/desktop/scripts/e2e.mjs`, Electron + CDP con datos y puertos aislados): **11/11 OK** — ventana y Core, proyecto vía proxy, terminal ConPTY con eco visible en xterm, el renderer no ve el token y recibe 403 fuera de la lista blanca, cierre normal de la ventana, **CA-03** (Core y terminal siguen vivos) y, al reabrir, workspace restaurado y **scrollback recuperado**.
+* **Tests del Core en Windows:** los helpers ahora usan PowerShell en win32 (antes fijaban `bash`); `services/core` 39/39 y `test:win` ampliado a desktop, core y agent-adapters (107 tests).
+* **Tarea programada de inicio:** `scripts/install-startup.ps1` (y `-Remove`), sin admin, solo 127.0.0.1. Sintaxis validada pero **NO ejecutada** ni probada en un reinicio: modifica la configuración del sistema, así que la activas tú.
+* Nota de prueba: `taskkill /T` sobre Electron también mata al Core (descendiente por PID); un cierre normal de ventana no. El E2E cierra la ventana como el usuario.
+* **Pendiente de Etapa 1:** Playwright/CI formal, prueba tras reinicio de la tarea programada, ACL del `api-token` (icacls), RNF-12 (0 huérfanos tras cerrar) medido en sesión larga, aspecto visual revisado por una persona.

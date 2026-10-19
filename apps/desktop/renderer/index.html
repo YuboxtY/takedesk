@@ -2,9 +2,10 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AI Workspace</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -39,10 +40,16 @@
       <table><thead><tr><th>Estado</th><th>Agente</th><th>Modo</th><th>Título</th><th></th></tr></thead><tbody id="runs"></tbody></table>
     </section>
     <section>
+      <h2>Terminal <span id="term-title" class="muted"></span></h2>
+      <div class="row"><button id="term-new">Nuevo terminal</button><select id="term-select"></select><button id="term-kill">Cerrar terminal</button><span id="term-msg" class="msg"></span></div>
+      <div id="term"></div>
+    </section>
+    <section>
       <h2>Salida <span id="out-title" class="muted"></span></h2>
       <pre id="output">Selecciona un run.</pre>
     </section>
   </main>
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

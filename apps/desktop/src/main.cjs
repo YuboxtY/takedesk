@@ -1,11 +1,31 @@
 'use strict';
 const path = require('node:path');
+const fs = require('node:fs');
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const { createProxy } = require('./api-proxy.cjs');
 const { ensureCore } = require('./core-launcher.cjs');
+const { createTerminalBridge } = require('./terminal-bridge.cjs');
 
 let request = null;
+let bridge = null;
 let win = null;
+
+// Workspace: qué proyecto/run/terminal estaba abierto. Se guarda en userData (no en el repo).
+const workspaceFile = () => path.join(app.getPath('userData'), 'workspace.json');
+function loadWorkspace() {
+  try {
+    const w = JSON.parse(fs.readFileSync(workspaceFile(), 'utf8'));
+    return w && typeof w === 'object' ? w : {};
+  } catch {
+    return {};
+  }
+}
+function saveWorkspace(w) {
+  const clean = {};
+  for (const k of ['projectId', 'runId', 'terminalId', 'adapter', 'mode']) if (typeof w[k] === 'string' && w[k].length < 200) clean[k] = w[k];
+  fs.mkdirSync(path.dirname(workspaceFile()), { recursive: true });
+  fs.writeFileSync(workspaceFile(), JSON.stringify(clean));
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -38,6 +58,23 @@ ipcMain.handle('core:request', async (_e, method, pathAndQuery, body) => {
   }
 });
 
+const sendToWindow = (channel, ...args) => {
+  if (win && !win.isDestroyed()) win.webContents.send(channel, ...args);
+};
+
+const needBridge = () => {
+  if (!bridge) throw new Error('El Core no está listo');
+  return bridge;
+};
+ipcMain.handle('term:list', () => needBridge().list());
+ipcMain.handle('term:open', (_e, projectId, cols, rows) => needBridge().open(String(projectId), Number(cols) || 120, Number(rows) || 30));
+ipcMain.handle('term:attach', (_e, id) => needBridge().attach(String(id)));
+ipcMain.handle('term:kill', (_e, id) => needBridge().kill(String(id)));
+ipcMain.on('term:input', (_e, id, data) => bridge && bridge.input(String(id), data));
+ipcMain.on('term:resize', (_e, id, cols, rows) => bridge && bridge.resize(String(id), cols, rows));
+ipcMain.handle('workspace:load', () => loadWorkspace());
+ipcMain.handle('workspace:save', (_e, w) => saveWorkspace(w && typeof w === 'object' ? w : {}));
+
 ipcMain.handle('dialog:pickFolder', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
   return r.canceled ? null : r.filePaths[0];
@@ -45,8 +82,9 @@ ipcMain.handle('dialog:pickFolder', async () => {
 
 app.whenReady().then(async () => {
   try {
-    const core = await ensureCore();
+    const core = await ensureCore({ port: Number(process.env.AIW_PORT) || undefined });
     request = createProxy({ port: core.port, token: core.token });
+    bridge = createTerminalBridge({ request: createProxy({ port: core.port, token: core.token, internal: true }), port: core.port, send: sendToWindow });
   } catch (e) {
     dialog.showErrorBox('AI Workspace', String(e && e.message ? e.message : e));
   }
@@ -58,3 +96,5 @@ app.whenReady().then(async () => {
 
 // Cerrar la ventana cierra la app, pero NO el Core (agentes y terminales siguen vivos).
 app.on('window-all-closed', () => app.quit());
+// Solo se sueltan los sockets: los terminales siguen vivos en el Core.
+app.on('before-quit', () => bridge && bridge.dispose());

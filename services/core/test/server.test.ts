@@ -36,6 +36,7 @@ afterEach(async () => {
 const H = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' };
 const api = (p: string, init: RequestInit = {}) => fetch(base + p, { ...init, headers: { ...H, ...(init.headers ?? {}) } });
 const json = async (r: Response) => r.json() as Promise<any>;
+const WIN = process.platform === 'win32';
 
 async function addProject(): Promise<string> {
   const r = await api('/v1/projects', { method: 'POST', body: JSON.stringify({ path: env.repo }) });
@@ -182,7 +183,7 @@ describe('Terminales (CA-03)', () => {
 
     const c1 = wsClient(wsUrl(`/v1/terminals/${term.id}/ws?ticket=${await ticket()}`));
     await c1.opened;
-    c1.ws.send(JSON.stringify({ type: 'input', data: 'echo hola-$((20+22))\n' }));
+    c1.ws.send(JSON.stringify({ type: 'input', data: WIN ? 'echo hola-$(20+22)\r' : 'echo hola-$((20+22))\n' }));
     await waitFor(() => c1.msgs.map((m) => m.data ?? '').join('').includes('hola-42'), 5000, 'eco del terminal');
     c1.ws.close(); // "se cierra Electron"
     await c1.closed;
@@ -193,12 +194,12 @@ describe('Terminales (CA-03)', () => {
     await c2.opened;
     await waitFor(() => c2.msgs.map((m) => m.data ?? '').join('').includes('hola-42'), 5000, 'scrollback tras reconectar');
     // y sigue interactivo
-    c2.ws.send(JSON.stringify({ type: 'input', data: 'echo otra-$((1+1))\n' }));
+    c2.ws.send(JSON.stringify({ type: 'input', data: WIN ? 'echo otra-$(1+1)\r' : 'echo otra-$((1+1))\n' }));
     await waitFor(() => c2.msgs.map((m) => m.data ?? '').join('').includes('otra-2'), 5000);
     // mensajes inválidos se ignoran sin romper
     c2.ws.send('no es json');
     c2.ws.send(JSON.stringify({ type: 'input', data: 'x'.repeat(70000) }));
-    c2.ws.send(JSON.stringify({ type: 'input', data: 'exit\n' }));
+    c2.ws.send(JSON.stringify({ type: 'input', data: WIN ? 'exit\r' : 'exit\n' }));
     await waitFor(() => c2.msgs.find((m) => m.type === 'exit'), 5000, 'salida del shell');
     c2.ws.close();
   });

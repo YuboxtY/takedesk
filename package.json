@@ -10,7 +10,7 @@
     "verify": "pnpm check:boundaries && pnpm typecheck && pnpm test",
     "core": "tsx services/core/src/main.ts",
     "poc": "pnpm --filter @aiw/core exec tsx scripts/poc-env.ts",
-    "test:win": "vitest run packages/database packages/git-engine packages/domain packages/contracts apps/desktop",
+    "test:win": "vitest run packages/database packages/git-engine packages/domain packages/contracts apps/desktop services/core packages/agent-adapters",
     "desktop": "pnpm --filter @aiw/desktop start"
   },
   "pnpm": {
