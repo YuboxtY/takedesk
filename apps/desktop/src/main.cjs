@@ -5,6 +5,7 @@ const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const { createProxy } = require('./api-proxy.cjs');
 const { ensureCore } = require('./core-launcher.cjs');
 const { createTerminalBridge } = require('./terminal-bridge.cjs');
+const { sanitizeWorkspace } = require('./workspace.cjs');
 
 let request = null;
 let bridge = null;
@@ -15,16 +16,14 @@ const workspaceFile = () => path.join(app.getPath('userData'), 'workspace.json')
 function loadWorkspace() {
   try {
     const w = JSON.parse(fs.readFileSync(workspaceFile(), 'utf8'));
-    return w && typeof w === 'object' ? w : {};
+    return sanitizeWorkspace(w);
   } catch {
     return {};
   }
 }
 function saveWorkspace(w) {
-  const clean = {};
-  for (const k of ['projectId', 'runId', 'terminalId', 'adapter', 'mode']) if (typeof w[k] === 'string' && w[k].length < 200) clean[k] = w[k];
   fs.mkdirSync(path.dirname(workspaceFile()), { recursive: true });
-  fs.writeFileSync(workspaceFile(), JSON.stringify(clean));
+  fs.writeFileSync(workspaceFile(), JSON.stringify(sanitizeWorkspace(w)));
 }
 
 function createWindow() {

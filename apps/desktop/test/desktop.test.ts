@@ -66,3 +66,34 @@ describe('core-launcher', () => {
     ).rejects.toThrow(/no respondió/);
   });
 });
+
+describe('workspace (sanitizado)', () => {
+  const { sanitizeWorkspace } = require('../src/workspace.cjs');
+  it('conserva paneles válidos y descarta lo desconocido o excesivo', () => {
+    const w = sanitizeWorkspace({
+      projectId: 'prj_1',
+      evil: 'x',
+      layout: [
+        { id: 't1', type: 'agent', x: 10.4, y: -50, w: 100, h: 99999, z: 3, state: { adapter: 'claude', runId: 'r1', '__proto__': 'x', 'bad key': 1, nested: { a: 1 }, text: 'a'.repeat(30000) } },
+        { type: 'raro', x: 1 },
+        null,
+        { id: '../etc', type: 'notes' },
+      ],
+    });
+    expect(w.projectId).toBe('prj_1');
+    expect('evil' in w).toBe(false);
+    expect(w.layout).toHaveLength(2);
+    expect(w.layout[0]).toMatchObject({ id: 't1', type: 'agent', x: 10, y: 0, w: 280, h: 4000, z: 3 });
+    expect(Object.keys(w.layout[0].state).sort()).toEqual(['adapter', 'runId', 'text']);
+    expect(w.layout[0].state.text).toHaveLength(20000);
+    expect(w.layout[1].id).toBeUndefined();
+  });
+  it('limita el número de paneles', () => {
+    const layout = Array.from({ length: 100 }, () => ({ type: 'notes' }));
+    expect(sanitizeWorkspace({ layout }).layout).toHaveLength(40);
+  });
+  it('tolera basura', () => {
+    expect(sanitizeWorkspace(null)).toEqual({});
+    expect(sanitizeWorkspace('x')).toEqual({});
+  });
+});

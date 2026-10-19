@@ -10,6 +10,7 @@
     "electron": "^39.0.0"
   },
   "dependencies": {
+    "@xterm/addon-fit": "0.10",
     "@xterm/xterm": "5"
   }
 }
