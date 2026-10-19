@@ -19,6 +19,12 @@
   <div id="spaces" role="tablist" aria-label="Espacios"></div>
   <nav id="toolbar" aria-label="Añadir panel"></nav>
   <main id="canvas-scroll"><div id="canvas"></div></main>
+  <div id="hud" role="group" aria-label="Zoom">
+    <button id="zoom-out" title="Alejar (Ctrl+Alt+−)">−</button>
+    <button id="zoom-reset" title="100 % (Ctrl+Alt+0)"><span id="zoom-label">100 %</span></button>
+    <button id="zoom-in" title="Acercar (Ctrl+Alt++)">＋</button>
+    <button id="zoom-fit" title="Ajustar todo (Ctrl+Alt+F)">⤢ Ajustar</button>
+  </div>
   <div id="help" hidden></div>
   <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>

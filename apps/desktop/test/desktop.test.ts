@@ -83,7 +83,7 @@ describe('workspace (sanitizado)', () => {
     expect(w.projectId).toBe('prj_1');
     expect('evil' in w).toBe(false);
     expect(w.layout).toHaveLength(2);
-    expect(w.layout[0]).toMatchObject({ id: 't1', type: 'agent', x: 10, y: 0, w: 280, h: 4000, z: 3 });
+    expect(w.layout[0]).toMatchObject({ id: 't1', type: 'agent', x: 10, y: -50, w: 280, h: 4000, z: 3 });
     expect(Object.keys(w.layout[0].state).sort()).toEqual(['adapter', 'runId', 'text']);
     expect(w.layout[0].state.text).toHaveLength(20000);
     expect(w.layout[1].id).toBeUndefined();
@@ -118,5 +118,26 @@ describe('workspace: espacios', () => {
     const spaces = Array.from({ length: 50 }, (_, i) => ({ id: `s${i}`, name: `E${i}` }));
     expect(sanitizeWorkspace({ spaces }).spaces).toHaveLength(12);
     expect('activeSpace' in sanitizeWorkspace({ activeSpace: '../x' })).toBe(false);
+  });
+});
+
+describe('workspace: cámara por espacio', () => {
+  const { sanitizeWorkspace } = require('../src/workspace.cjs');
+  it('acota zoom y posición, y descarta vistas inválidas', () => {
+    const w = sanitizeWorkspace({ spaces: [
+      { id: 'a', name: 'A', view: { x: 10, y: -20, k: 0.5 } },
+      { id: 'b', name: 'B', view: { x: 1e9, y: -1e9, k: 99 } },
+      { id: 'c', name: 'C', view: { x: 'x', y: 0, k: 1 } },
+      { id: 'd', name: 'D', view: { x: 0, y: 0, k: 0 } },
+    ] });
+    expect(w.spaces[0].view).toEqual({ x: 10, y: -20, k: 0.5 });
+    expect(w.spaces[1].view).toEqual({ x: 1e6, y: -1e6, k: 3 });
+    expect(w.spaces[2].view).toBeUndefined();
+    expect(w.spaces[3].view).toEqual({ x: 0, y: 0, k: 0.1 });
+  });
+  it('admite paneles en coordenadas negativas (lienzo infinito) y los tipos nuevos', () => {
+    const w = sanitizeWorkspace({ layout: [{ type: 'browser', x: -500, y: -40 }, { type: 'editor' }, { type: 'apps' }, { type: 'raro' }] });
+    expect(w.layout).toHaveLength(3);
+    expect(w.layout[0]).toMatchObject({ x: -500, y: -40 });
   });
 });

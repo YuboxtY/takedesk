@@ -88,7 +88,8 @@ try {
   await click(page, '[data-add="terminal"]');
   await click(page, '[data-add="terminal"]');
   check('dos terminales en dos paneles', await waitFor(async () => (await countTiles(page, 'terminal')) === 2 && (await termIds(page)).length === 2));
-  await sleep(2500);
+  // esperar a que ambos shells muestren su prompt (en vez de una espera fija: el arranque de PowerShell varía con la carga)
+  await waitFor(async () => (await tileText(page, 'terminal', 0, '.xterm-rows')).includes('PS ') && (await tileText(page, 'terminal', 1, '.xterm-rows')).includes('PS '), 30000);
   const ids = await termIds(page);
   const echo = (w) => (process.platform === 'win32' ? `echo ${w}-$(40+2)\\r` : `echo ${w}-$((40+2))\\n`);
   await page.evaluate(`window.aiw.term.input(${JSON.stringify(ids[0])}, "${echo('alfa')}")`);
@@ -181,7 +182,51 @@ try {
   check('Ctrl+Shift+W cierra el panel enfocado', (await key('KeyW', { ctrl: true, shift: true })) && await waitFor(async () => (await totalCount()) === 8));
   await key('F1');
   check('F1 muestra la ayuda de atajos y Escape la cierra', (await page.evaluate("!document.getElementById('help').hidden && document.getElementById('help').textContent.includes('Ctrl+Shift+T')")) && (await key('Escape')) === false && await waitFor(() => page.evaluate("document.getElementById('help').hidden")));
-  await sleep(1200); // guardado del layout con espacios
+  // ---- zoom y paneo del lienzo infinito
+  const vp = "document.getElementById('canvas-scroll')";
+  const cam = () => page.evaluate(`(() => { const v = ${vp}; return { x: parseFloat(v.style.getPropertyValue('--vx')), y: parseFloat(v.style.getPropertyValue('--vy')), k: parseFloat(v.style.getPropertyValue('--vk')), label: document.getElementById('zoom-label').textContent }; })()`);
+  const vrect = () => page.evaluate(`(() => { const r = ${vp}.getBoundingClientRect(); return { left: r.left, top: r.top, w: r.width, h: r.height }; })()`);
+  const wheel = (dx, dy, ctrl, cx, cy) => page.evaluate(`${vp}.dispatchEvent(new WheelEvent('wheel', { deltaX: ${dx}, deltaY: ${dy}, ctrlKey: ${ctrl}, clientX: ${cx}, clientY: ${cy}, bubbles: true, cancelable: true }))`);
+  await click(page, '#zoom-reset');
+  await sleep(200);
+  const c0 = await cam(); const vr = await vrect();
+  check('el zoom parte en 100 %', c0.k === 1 && c0.label === '100 %', JSON.stringify(c0));
+  const cx = vr.left + 600, cy = vr.top + 300;
+  await wheel(0, -300, true, cx, cy);
+  const c1 = await cam();
+  const w0x = (cx - vr.left - c0.x) / c0.k; const w1x = (cx - vr.left - c1.x) / c1.k;
+  check('Ctrl+rueda acerca y mantiene fijo el punto bajo el cursor', c1.k > 1 && Math.abs(w0x - w1x) < 0.5, `k=${c1.k.toFixed(2)}`);
+  await wheel(0, 100, false, cx, cy);
+  const c2 = await cam();
+  check('la rueda sobre el fondo desplaza el lienzo', Math.abs(c2.y - (c1.y - 100)) < 0.5 && c2.k === c1.k);
+  await page.evaluate(`(() => { const v = ${vp}; const o = (x, y) => ({ bubbles: true, button: 0, clientX: x, clientY: y }); v.dispatchEvent(new PointerEvent('pointerdown', o(300, 600))); window.dispatchEvent(new PointerEvent('pointermove', o(350, 630))); window.dispatchEvent(new PointerEvent('pointerup', o(350, 630))); })()`);
+  const c3 = await cam();
+  check('arrastrar el fondo desplaza el lienzo', Math.abs(c3.x - (c2.x + 50)) < 0.5 && Math.abs(c3.y - (c2.y + 30)) < 0.5);
+  await click(page, '#zoom-reset'); await sleep(200);
+  await click(page, '#zoom-out'); await sleep(200);
+  const c4 = await cam();
+  check('el botón − aleja y el botón 100 % restablece', c4.k < 1 && c4.label.endsWith('%'));
+  await key('Equal', { ctrl: true, alt: true });
+  const c5 = await cam();
+  check('Ctrl+Alt++ acerca', c5.k > c4.k);
+  await key('Digit0', { ctrl: true, alt: true });
+  check('Ctrl+Alt+0 vuelve al 100 %', (await cam()).k === 1);
+  await key('Minus', { ctrl: true, alt: true }); await key('Minus', { ctrl: true, alt: true });
+  const kz = (await cam()).k;
+  const tBefore = await rect(page, 'terminal', 0);
+  await pointer(page, 'terminal', 0, '.tile-head', 100, 0);
+  const tAfter = await rect(page, 'terminal', 0);
+  const expectedX = Math.round((tBefore.x + 100 / kz) / 10) * 10;
+  check('arrastrar un panel con zoom respeta la escala', kz < 1 && tAfter.x === expectedX, `k=${kz.toFixed(2)} x ${tBefore.x}→${tAfter.x} (esperado ${expectedX})`);
+  await click(page, '#zoom-fit'); await sleep(300);
+  const fit = await cam(); const fr = await vrect();
+  const inside = await page.evaluate(`[...document.querySelectorAll('.tile')].filter(t => t.offsetParent !== null).every(t => { const r = t.getBoundingClientRect(); return r.left >= ${fr.left} - 2 && r.top >= ${fr.top} - 2 && r.right <= ${fr.left + fr.w} + 2 && r.bottom <= ${fr.top + fr.h} + 2; })`);
+  check('Ajustar deja todos los paneles visibles a la vez', inside && fit.k <= 1, `k=${fit.k.toFixed(2)}`);
+  globalThis.savedK = fit.k;
+  if (process.env.E2E_SHOT) fs.writeFileSync(process.env.E2E_SHOT.replace('.png', '-fit.png'), Buffer.from((await page.send('Page.captureScreenshot', { format: 'png' })).result.data, 'base64'));
+  layoutBefore.term0 = await rect(page, 'terminal', 0); // el arrastre con zoom movió este panel a propósito
+  layoutBefore.agent0 = await rect(page, 'agent', 0);
+  await sleep(1200); // guardado del layout con espacios y de la cámara
 
   // ---- cierre normal de la ventana (CA-03)
   await Promise.race([page.evaluate('window.close()'), sleep(1000)]).catch(() => {});
@@ -197,6 +242,7 @@ try {
   page = await connect(9334);
   check('se restauran los 8 paneles (7 + la nota del espacio 2)', await waitFor(async () => (await page.evaluate("document.querySelectorAll('.tile').length")) === 8));
   check('se restauran los espacios, su nombre y el espacio activo', await waitFor(async () => { const t = await tabs(); return t.length === 2 && t[0].name === 'Espacio 1' && t[1].name === 'Docs' && t[0].active && (await visibleCount()) === 7; }));
+  check('la cámara (zoom y posición) del espacio se restaura', await waitFor(async () => Math.abs((await cam()).k - globalThis.savedK) < 0.01), `${(await cam()).label}`);
   await key('Digit2', { ctrl: true, alt: true });
   check('el espacio 2 conserva su nota con texto', await waitFor(async () => (await visibleCount()) === 1 && (await inTile(page, 'notes', 1, '.notes-area', "if (e.value !== 'nota del espacio 2') throw new Error('x')"))));
   await key('Digit1', { ctrl: true, alt: true });

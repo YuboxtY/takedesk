@@ -1,13 +1,17 @@
 'use strict';
-// Lienzo de paneles ("tiles"): cada panel es independiente (un agente, un terminal, una revisión, notas),
-// se arrastra por su cabecera, se redimensiona por la esquina y recuerda su sitio. Sin innerHTML:
-// todo se construye con h() y textContent (los datos de agentes y archivos no son confiables).
+// Lienzo infinito de paneles ("tiles"): cada panel es independiente (un agente, un terminal, una revisión,
+// un navegador…), se arrastra por su cabecera, se redimensiona por la esquina y recuerda su sitio. El lienzo
+// se desplaza (paneo) y se amplía/reduce (zoom) con una cámara por espacio. Sin innerHTML: todo se construye
+// con h() y textContent (los datos de agentes y archivos no son confiables).
 (() => {
   const AIW = (window.AIW = window.AIW || {});
   const GRID = 10;
   const MIN_W = 280;
   const MIN_H = 160;
+  const MIN_K = 0.1;
+  const MAX_K = 3;
   const snap = (v) => Math.round(v / GRID) * GRID;
+  const clampK = (k) => Math.min(MAX_K, Math.max(MIN_K, k));
 
   AIW.h = function h(tag, props = {}, ...kids) {
     const el = document.createElement(tag);
@@ -28,24 +32,122 @@
     agent: [500, 400],
     review: [580, 420],
     notes: [300, 230],
+    browser: [640, 440],
+    editor: [700, 460],
+    apps: [320, 300],
   };
 
   /**
-   * root: contenedor posicionado. builders: { tipo: (tile, ctx) => { destroy?(reason), onResize?() } }.
-   * onChange se llama (sin rebote) cuando cambia posición, tamaño, estado o el conjunto de paneles.
+   * root: el "mundo" (se le aplica la transformación de la cámara); su padre es el viewport.
+   * builders: { tipo: (tile, ctx) => { destroy?(reason), onResize?() } }.
+   * onChange: cambios de paneles (posición, tamaño, estado, conjunto), sin rebote.
+   * onView: cambios de la cámara, sin rebote.
    */
-  AIW.createCanvas = function createCanvas(root, { builders, onChange }) {
+  AIW.createCanvas = function createCanvas(root, { builders, onChange, onView }) {
+    const viewport = root.parentElement;
     const entries = new Map(); // id -> { tile, frame, body, titleEl, actionsEl, inst }
     let zTop = 1;
     let seq = 0;
-    let activeSpace = null; // espacio visible; los paneles de otros espacios siguen vivos pero ocultos
+    let activeSpace = null;
     let focusedId = null;
+    let view = { x: 40, y: 40, k: 1 };
     let timer = null;
+    let viewTimer = null;
     const changed = () => {
       clearTimeout(timer);
       timer = setTimeout(() => onChange && onChange(), 400);
     };
 
+    // ------------------------------------------------------------------ cámara
+    function applyView() {
+      root.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`;
+      viewport.style.setProperty('--vx', `${view.x}px`);
+      viewport.style.setProperty('--vy', `${view.y}px`);
+      viewport.style.setProperty('--vk', String(view.k));
+      viewport.dataset.zoom = String(Math.round(view.k * 100));
+      clearTimeout(viewTimer);
+      viewTimer = setTimeout(() => onView && onView({ ...view }), 300);
+      if (AIW.onZoom) AIW.onZoom(view.k);
+    }
+
+    const vsize = () => ({ w: viewport.clientWidth, h: viewport.clientHeight });
+
+    function zoomAt(factor, cx, cy) {
+      const r = viewport.getBoundingClientRect();
+      const px = (cx ?? r.left + r.width / 2) - r.left;
+      const py = (cy ?? r.top + r.height / 2) - r.top;
+      const k = clampK(view.k * factor);
+      const wx = (px - view.x) / view.k;
+      const wy = (py - view.y) / view.k;
+      view = { k, x: px - wx * k, y: py - wy * k };
+      applyView();
+    }
+
+    function setZoom(k) {
+      zoomAt(clampK(k) / view.k);
+    }
+
+    function fitAll() {
+      const list = [...entries.values()].map((e) => e.tile).filter((t) => t.space === activeSpace);
+      const { w, h: vh } = vsize();
+      if (!list.length || !w) {
+        view = { x: 40, y: 40, k: 1 };
+        return applyView();
+      }
+      const minX = Math.min(...list.map((t) => t.x));
+      const minY = Math.min(...list.map((t) => t.y));
+      const maxX = Math.max(...list.map((t) => t.x + t.w));
+      const maxY = Math.max(...list.map((t) => t.y + t.h));
+      const pad = 60;
+      const k = clampK(Math.min((w - pad * 2) / (maxX - minX), (vh - pad * 2) / (maxY - minY), 1));
+      view = { k, x: (w - (maxX - minX) * k) / 2 - minX * k, y: (vh - (maxY - minY) * k) / 2 - minY * k };
+      applyView();
+    }
+
+    /** Desplaza la cámara lo mínimo para que el panel quede a la vista. */
+    function ensureVisible(tile) {
+      const { w, h: vh } = vsize();
+      const m = 30;
+      const left = tile.x * view.k + view.x, top = tile.y * view.k + view.y;
+      const right = left + tile.w * view.k, bottom = top + tile.h * view.k;
+      let { x, y } = view;
+      if (left < m) x += m - left; else if (right > w - m) x -= right - (w - m);
+      if (top < m) y += m - top; else if (bottom > vh - m) y -= bottom - (vh - m);
+      if (tile.w * view.k > w - 2 * m) x = m - tile.x * view.k; // más ancho que la ventana: alinear a la izquierda
+      if (tile.h * view.k > vh - 2 * m) y = m - tile.y * view.k;
+      if (x !== view.x || y !== view.y) { view = { ...view, x, y }; applyView(); }
+    }
+
+    // rueda: Ctrl+rueda (y el pellizco del trackpad) hace zoom en el cursor; sobre el fondo, la rueda desplaza.
+    viewport.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        zoomAt(Math.exp(-e.deltaY * 0.0018), e.clientX, e.clientY);
+      } else if (!e.target.closest('.tile')) {
+        e.preventDefault();
+        view = { ...view, x: view.x - e.deltaX, y: view.y - e.deltaY };
+        applyView();
+      }
+    }, { passive: false });
+
+    // arrastrar el fondo (o el botón central en cualquier sitio) desplaza el lienzo
+    viewport.addEventListener('pointerdown', (e) => {
+      const onBg = e.target === viewport || e.target === root;
+      if (!((e.button === 0 && onBg) || e.button === 1)) return;
+      e.preventDefault();
+      viewport.classList.add('panning');
+      const sx = e.clientX, sy = e.clientY, ox = view.x, oy = view.y;
+      const move = (ev) => { view = { ...view, x: ox + ev.clientX - sx, y: oy + ev.clientY - sy }; applyView(); };
+      const up = () => {
+        viewport.classList.remove('panning');
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
+
+    // ------------------------------------------------------------------ paneles
     function place(frame, t) {
       frame.style.left = t.x + 'px';
       frame.style.top = t.y + 'px';
@@ -71,8 +173,8 @@
       focus(ent.tile.id);
       const sx = e.clientX, sy = e.clientY, ox = ent.tile.x, oy = ent.tile.y;
       const move = (ev) => {
-        ent.tile.x = Math.max(0, snap(ox + ev.clientX - sx));
-        ent.tile.y = Math.max(0, snap(oy + ev.clientY - sy));
+        ent.tile.x = snap(ox + (ev.clientX - sx) / view.k);
+        ent.tile.y = snap(oy + (ev.clientY - sy) / view.k);
         place(ent.frame, ent.tile);
       };
       const up = () => {
@@ -90,8 +192,8 @@
       focus(ent.tile.id);
       const sx = e.clientX, sy = e.clientY, ow = ent.tile.w, oh = ent.tile.h;
       const move = (ev) => {
-        ent.tile.w = Math.max(MIN_W, snap(ow + ev.clientX - sx));
-        ent.tile.h = Math.max(MIN_H, snap(oh + ev.clientY - sy));
+        ent.tile.w = Math.max(MIN_W, snap(ow + (ev.clientX - sx) / view.k));
+        ent.tile.h = Math.max(MIN_H, snap(oh + (ev.clientY - sy) / view.k));
         place(ent.frame, ent.tile);
       };
       const up = () => {
@@ -105,16 +207,18 @@
       e.stopPropagation();
     }
 
-    /** Primer hueco sin solapar (recorriendo el área visible por filas); si no hay, en cascada. */
+    /** Primer hueco sin solapar dentro del área visible (en coordenadas del mundo); si no hay, en cascada. */
     function freeSpot(w, h, space) {
-      const scroller = root.parentElement;
-      const maxX = Math.max(w + 40, (scroller ? scroller.clientWidth : 1200) - 20);
-      const maxY = Math.max(h + 40, 8000);
+      const { w: vw, h: vh } = vsize();
+      const x0 = Math.ceil((-view.x / view.k + 40) / 20) * 20;
+      const y0 = Math.ceil((-view.y / view.k + 40) / 20) * 20;
+      const maxX = Math.max(x0 + w + 20, -view.x / view.k + (vw || 1200) / view.k - 20);
+      const maxY = y0 + Math.max(h + 40, 8000);
       const rects = [...entries.values()].map(({ tile }) => tile).filter((t) => t.space === space);
       const free = (x, y) => rects.every((r) => x + w + 10 <= r.x || r.x + r.w + 10 <= x || y + h + 10 <= r.y || r.y + r.h + 10 <= y);
-      for (let y = 20; y + h <= maxY; y += 20) for (let x = 20; x + w <= maxX; x += 20) if (free(x, y)) return { x, y };
+      for (let y = y0; y + h <= maxY; y += 20) for (let x = x0; x + w <= maxX; x += 20) if (free(x, y)) return { x, y };
       const n = rects.length;
-      return { x: 20 + (n % 8) * 30, y: 20 + (n % 8) * 30 };
+      return { x: x0 + (n % 8) * 30, y: y0 + (n % 8) * 30 };
     }
 
     function add(input) {
@@ -184,24 +288,26 @@
 
     const inSpace = (space) => [...entries.values()].filter((e) => e.tile.space === space);
 
-    function setActiveSpace(space) {
+    function setActiveSpace(space, nextView) {
       activeSpace = space;
       for (const e of entries.values()) e.frame.classList.toggle('other-space', e.tile.space !== space);
-      const vis = inSpace(space);
-      const top = vis.sort((a, b) => b.tile.z - a.tile.z)[0];
+      view = nextView && Number.isFinite(nextView.k) ? { x: nextView.x, y: nextView.y, k: clampK(nextView.k) } : { x: 40, y: 40, k: 1 };
+      applyView();
+      const top = inSpace(space).sort((a, b) => b.tile.z - a.tile.z)[0];
       focusedId = null;
       for (const e of entries.values()) e.frame.classList.remove('focused');
       if (top) focus(top.tile.id);
       changed();
     }
 
-    /** Foco al panel siguiente (+1) o anterior (-1) del espacio activo, en orden de creación. */
+    /** Foco al panel siguiente (+1) o anterior (-1) del espacio activo, en orden de creación, y lo trae a la vista. */
     function cycleFocus(dir) {
       const list = inSpace(activeSpace);
       if (!list.length) return;
       const i = list.findIndex((e) => e.tile.id === focusedId);
       const next = list[(i + dir + list.length) % list.length];
       focus(next.tile.id);
+      ensureVisible(next.tile);
     }
 
     return {
@@ -210,6 +316,12 @@
       focus,
       setActiveSpace,
       cycleFocus,
+      zoomAt,
+      zoomBy: (f) => zoomAt(f),
+      setZoom,
+      fitAll,
+      resetView: () => { view = { x: 40, y: 40, k: 1 }; applyView(); },
+      getView: () => ({ ...view }),
       focused: () => focusedId,
       countIn: (space) => inSpace(space).length,
       /** Cierra todos los paneles de un espacio (los terminales se cierran en el Core). */

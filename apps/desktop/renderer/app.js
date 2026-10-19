@@ -74,9 +74,11 @@
 
   function switchSpace(id) {
     if (!spaces.some((s) => s.id === id) || id === activeSpace) return;
+    const cur = spaces.find((s) => s.id === activeSpace);
+    if (cur) cur.view = canvas.getView(); // recordar la cámara del espacio que se deja
     activeSpace = id;
     armedClose = null;
-    canvas.setActiveSpace(id);
+    canvas.setActiveSpace(id, spaces.find((s) => s.id === id).view);
     renderSpaces();
     saveWorkspace();
   }
@@ -105,7 +107,7 @@
     spaces.splice(idx, 1);
     if (activeSpace === id) {
       activeSpace = spaces[Math.min(idx, spaces.length - 1)].id;
-      canvas.setActiveSpace(activeSpace);
+      canvas.setActiveSpace(activeSpace, spaces.find((s) => s.id === activeSpace).view);
     }
     renderSpaces();
     saveWorkspace();
@@ -127,6 +129,11 @@
     ['Ctrl+Alt+1 … 9', 'Ir al espacio 1 … 9'],
     ['Ctrl+Alt+← / →', 'Espacio anterior / siguiente'],
     ['Ctrl+Alt+↑ / ↓', 'Enfocar el panel anterior / siguiente'],
+    ['Ctrl+rueda / pellizco', 'Zoom en el cursor'],
+    ['Rueda o arrastrar el fondo', 'Desplazar el lienzo (botón central: desde cualquier sitio)'],
+    ['Ctrl+Alt+ + / −', 'Acercar / alejar'],
+    ['Ctrl+Alt+0', 'Zoom al 100 %'],
+    ['Ctrl+Alt+F', 'Ajustar todos los paneles a la ventana'],
     ['F1', 'Mostrar u ocultar esta ayuda'],
   ];
 
@@ -160,6 +167,10 @@
     } else if (e.ctrlKey && e.altKey && !e.shiftKey) {
       const digit = /^(?:Digit|Numpad)([1-9])$/.exec(e.code);
       if (digit) { const sp = spaces[Number(digit[1]) - 1]; if (sp) switchSpace(sp.id); }
+      else if (e.code === 'Digit0' || e.code === 'Numpad0') canvas.setZoom(1)
+      else if (e.code === 'Equal' || e.code === 'NumpadAdd') canvas.zoomBy(1.25)
+      else if (e.code === 'Minus' || e.code === 'NumpadSubtract') canvas.zoomBy(0.8)
+      else if (e.code === 'KeyF') canvas.fitAll()
       else if (e.code === 'ArrowLeft') cycleSpace(-1);
       else if (e.code === 'ArrowRight') cycleSpace(1);
       else if (e.code === 'ArrowUp') canvas.cycleFocus(-1);
@@ -225,7 +236,16 @@
   api.term.onExit((id, code) => { const t = AIW.terms.get(id); if (t) t.exit(code); });
 
   (async () => {
-    canvas = AIW.createCanvas($('canvas'), { builders: AIW.builders, onChange: () => { renderSpaces(); saveWorkspace(); } });
+    canvas = AIW.createCanvas($('canvas'), {
+      builders: AIW.builders,
+      onChange: () => { renderSpaces(); saveWorkspace(); },
+      onView: (v) => { const sp = spaces.find((s) => s.id === activeSpace); if (sp) { sp.view = v; saveWorkspace(); } },
+    });
+    AIW.onZoom = (k) => { const el = $('zoom-label'); if (el) el.textContent = `${Math.round(k * 100)} %`; };
+    $('zoom-in').addEventListener('click', () => canvas.zoomBy(1.25));
+    $('zoom-out').addEventListener('click', () => canvas.zoomBy(0.8));
+    $('zoom-reset').addEventListener('click', () => canvas.setZoom(1));
+    $('zoom-fit').addEventListener('click', () => canvas.fitAll());
     window.addEventListener('beforeunload', () => canvas.disposeAll());
     window.addEventListener('keydown', onKey, true);
     $('add-project').addEventListener('click', addProject);
@@ -238,12 +258,12 @@
     await loadProjects(w.projectId);
     spaces = Array.isArray(w.spaces) && w.spaces.length ? w.spaces : [{ id: 's1', name: 'Espacio 1' }];
     activeSpace = spaces.some((s) => s.id === w.activeSpace) ? w.activeSpace : spaces[0].id;
-    canvas.setActiveSpace(activeSpace);
+    canvas.setActiveSpace(activeSpace, spaces.find((s) => s.id === activeSpace).view);
     for (const t of Array.isArray(w.layout) ? w.layout : []) {
       // Compatibilidad: paneles guardados sin espacio van al primero; un espacio desconocido también.
       canvas.add({ ...t, space: spaces.some((s) => s.id === t.space) ? t.space : spaces[0].id });
     }
-    canvas.setActiveSpace(activeSpace);
+    canvas.setActiveSpace(activeSpace, spaces.find((s) => s.id === activeSpace).view);
     ready = true;
     renderSpaces();
     setInterval(() => {
