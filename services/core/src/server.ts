@@ -10,7 +10,7 @@ import {
 import { readRunEvents, type Repos, type RunRow } from '@aiw/database';
 import { newId } from '@aiw/domain';
 import { summarize, type AgentAdapter } from '@aiw/agent-adapters';
-import { assertInside, GitError, repoRoot } from '@aiw/git-engine';
+import { assertInside, currentBranch, GitError, repoRoot, status as gitStatus } from '@aiw/git-engine';
 import { TicketStore, tokensEqual } from './auth';
 import type { CoreConfig } from './config';
 import { ApiError } from './errors';
@@ -121,6 +121,15 @@ export async function buildServer(d: ServerDeps): Promise<FastifyInstance> {
   app.get('/v1/capabilities', async () => ({ adapters: [...adapters.values()].map(summarize) }));
 
   app.get('/v1/projects', async () => ({ projects: repos.projects.list() }));
+
+  // Rama y estado del proyecto (migas de la barra superior de la app).
+  app.get('/v1/projects/:id/git', async (req) => {
+    const p = repos.projects.get((req.params as { id: string }).id);
+    if (!p) throw new ApiError(404, 'project-not-found', 'Proyecto inexistente');
+    const branch = await currentBranch(p.rootPath).catch(() => null); // repositorio sin commits o carpeta movida
+    const st = await gitStatus(p.rootPath).catch(() => null);
+    return { branch, clean: st ? st.clean : null, changes: st ? st.entries.length : null };
+  });
 
   app.post('/v1/projects', async (req, reply) => {
     const body = parse(CreateProjectBody, req.body);

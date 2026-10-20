@@ -1,0 +1,74 @@
+/* Chrome estilo Deska: lienzo a pantalla completa y barras flotantes de cristal. Se carga después de styles.css. */
+html, body { height: 100%; overflow: hidden; }
+body { display: block; }
+#canvas-scroll { position: fixed; inset: 0; flex: none; }
+
+.float { position: fixed; z-index: 90000; background: color-mix(in srgb, var(--panel) 82%, transparent); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.38); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); }
+
+/* barra superior izquierda: marca › proyecto › rama · tareas */
+#topbar { top: 12px; left: 12px; display: flex; align-items: center; gap: 8px; padding: 6px 12px; max-width: calc(100vw - 420px); }
+.brand { font-weight: 700; font-size: 13px; white-space: nowrap; }
+.brand-mark { color: var(--accent); }
+.crumb { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.crumb-sep { color: var(--muted); }
+#project { max-width: 260px; border: none; background: transparent; font-weight: 600; padding: 2px 4px; }
+.icon-btn { border: none; background: transparent; padding: 3px 8px; border-radius: 8px; color: var(--muted); }
+.icon-btn:hover { color: var(--fg); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+#branch::before { content: '⎇ '; }
+.chip.running { color: var(--accent); border-color: var(--accent); }
+#top-msg { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* barra superior derecha */
+#topright { top: 12px; right: 12px; display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
+
+/* rail de espacios (izquierda) */
+#rail { top: 76px; left: 12px; bottom: 84px; width: 72px; display: flex; flex-direction: column; align-items: center; padding: 10px 6px; gap: 8px; overflow: hidden; }
+.rail-title { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+#spaces { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; overflow-y: auto; padding: 0; border: none; background: none; }
+.space-tab { position: relative; flex-direction: column; gap: 3px; width: 56px; padding: 5px 3px 4px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--muted); align-items: center; }
+.space-tab:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--fg); }
+.space-tab.active { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--fg); font-weight: 600; }
+.space-thumb { position: relative; width: 46px; height: 34px; border-radius: 6px; background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px solid var(--line); overflow: hidden; }
+.space-thumb i { position: absolute; border-radius: 2px; background: var(--muted); opacity: .75; }
+.space-thumb i[data-type="terminal"] { background: #4ac26b; }
+.space-thumb i[data-type="agent"] { background: #5b8def; }
+.space-thumb i[data-type="editor"] { background: #c586c0; }
+.space-thumb i[data-type="browser"] { background: #e5a64a; }
+.space-thumb i[data-type="notes"] { background: #d8c6ff; }
+.space-tab .space-name { max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.space-tab .space-count { position: absolute; top: 2px; right: 2px; font-size: 10px; padding: 0 5px; }
+.space-tab .space-close { position: absolute; top: 2px; left: 2px; padding: 0 4px; font-size: 12px; opacity: 0; }
+.space-tab:hover .space-close, .space-close.armed { opacity: 1; }
+.space-close.armed { position: absolute; left: 62px; top: 4px; z-index: 5; width: max-content; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.space-rename { width: 52px; font-size: 10px; }
+.space-add { width: 46px; height: 34px; padding: 0; margin: 0; border: 1px dashed var(--line); border-radius: 8px; font-size: 16px; color: var(--muted); }
+.space-add:hover { color: var(--fg); border-color: var(--accent); }
+
+/* dock inferior */
+#dock { left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
+.dock-btn { min-width: 36px; height: 34px; padding: 0 8px; border: none; border-radius: 10px; background: transparent; font-size: 15px; }
+.dock-btn:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.dock-btn.wide { font-size: 13px; padding: 0 12px; white-space: nowrap; }
+.dock-btn.primary { background: var(--accent); color: #fff; }
+.dock-btn.primary:hover { filter: brightness(1.1); }
+.dock-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+
+/* menús que salen del dock */
+#addmenu, #extras { bottom: 66px; left: 50%; transform: translateX(-50%); z-index: 95000; padding: 10px; width: 330px; max-height: calc(100vh - 160px); overflow: auto; }
+#extras { width: 260px; display: flex; flex-direction: column; gap: 4px; left: calc(50% - 150px); transform: none; bottom: 66px; }
+#extras button { text-align: left; border: none; padding: 7px 10px; }
+#extras button:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.menu-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 2px 4px 8px; }
+#toolbar { display: flex; flex-direction: column; gap: 3px; padding: 0; background: none; border: none; }
+#toolbar button { text-align: left; border: none; padding: 7px 10px; border-radius: 8px; }
+#toolbar button:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+#toolbar .menu-section { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 8px 4px 2px; }
+
+/* HUD de zoom y menú de fondo */
+#hud { right: 14px; bottom: 14px; display: flex; gap: 2px; padding: 4px; border-radius: 12px; }
+#bg-menu { top: 64px; right: 12px; }
+
+/* paneles de cristal */
+.tile { background: color-mix(in srgb, var(--panel) 88%, transparent); backdrop-filter: blur(10px); border-radius: 14px; border-color: color-mix(in srgb, var(--line) 85%, transparent); }
+.tile-head { padding: 7px 8px 7px 14px; border-bottom-color: color-mix(in srgb, var(--line) 70%, transparent); }
+.tile-title { font-size: 12.5px; }

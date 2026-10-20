@@ -50,10 +50,25 @@
         hidden: spaces.length < 2,
         on: { click: (e) => { e.stopPropagation(); closeSpace(sp.id); } },
       });
-      return h('div', { className: 'space-tab' + (sp.id === activeSpace ? ' active' : ''), data: { space: sp.id }, on: { click: () => switchSpace(sp.id) } }, label, h('span', { className: 'space-count', textContent: String(count) }), closeBtn);
+      return h('div', { className: 'space-tab' + (sp.id === activeSpace ? ' active' : ''), data: { space: sp.id }, title: `${sp.name} (Ctrl+Alt+${i + 1})`, on: { click: () => switchSpace(sp.id) } }, thumbFor(sp.id), label, h('span', { className: 'space-count', textContent: String(count) }), closeBtn);
     });
-    const add = h('button', { id: 'space-add', className: 'space-add', textContent: '＋ Espacio', title: 'Nuevo espacio (Ctrl+Shift+S)', disabled: spaces.length >= MAX_SPACES, on: { click: addSpace } });
+    const add = h('button', { id: 'space-add', className: 'space-add', textContent: '＋', title: 'Nuevo espacio (Ctrl+Shift+S)', disabled: spaces.length >= MAX_SPACES, on: { click: addSpace } });
     bar.replaceChildren(...tabs, add);
+  }
+
+  /** Miniatura del espacio: sus paneles dibujados a escala, coloreados por tipo (como el rail de Deska). */
+  function thumbFor(spaceId) {
+    const thumb = h('span', { className: 'space-thumb' });
+    const tiles = canvas.serialize().filter((t) => t.space === spaceId);
+    if (!tiles.length) return thumb;
+    const minX = Math.min(...tiles.map((t) => t.x)), minY = Math.min(...tiles.map((t) => t.y));
+    const W = Math.max(1, Math.max(...tiles.map((t) => t.x + t.w)) - minX), H = Math.max(1, Math.max(...tiles.map((t) => t.y + t.h)) - minY);
+    const s = Math.min(40 / W, 28 / H);
+    const ox = (46 - W * s) / 2, oy = (34 - H * s) / 2;
+    for (const t of tiles) {
+      thumb.append(h('i', { data: { type: t.type }, attrs: { style: `left:${(ox + (t.x - minX) * s).toFixed(1)}px;top:${(oy + (t.y - minY) * s).toFixed(1)}px;width:${Math.max(3, t.w * s).toFixed(1)}px;height:${Math.max(2, t.h * s).toFixed(1)}px` } }));
+    }
+    return thumb;
   }
 
   function startRename(sp, label) {
@@ -153,6 +168,7 @@
   }
 
   function onKey(e) {
+    if (e.key === 'Escape' && anyMenuOpen()) { closeMenus(); return; }
     if (e.key === 'Escape' && !$('help').hidden) { toggleHelp(false); return; }
     if (e.key === 'F1') { e.preventDefault(); toggleHelp(); return; }
     const inField = e.target.closest && e.target.closest('input, select');
@@ -210,7 +226,7 @@
     const r = await api.request('GET', '/v1/projects');
     const list = r.status === 200 ? r.body.projects : [];
     const sel = $('project');
-    sel.replaceChildren(...list.map((p) => h('option', { value: p.id, textContent: `${p.name} — ${p.rootPath}` })));
+    sel.replaceChildren(...list.map((p) => h('option', { value: p.id, textContent: p.name, title: p.rootPath })));
     if (selectId && list.some((p) => p.id === selectId)) sel.value = selectId;
   }
 
@@ -227,20 +243,81 @@
     }
   }
 
+  // ------------------------------------------------------------------ barras flotantes, menús y dock
+  const MENUS = ['addmenu', 'extras'];
+  const anyMenuOpen = () => MENUS.some((m) => !$(m).hidden);
+  function closeMenus() { for (const m of MENUS) $(m).hidden = true; }
+  function toggleMenu(id) {
+    const opening = $(id).hidden;
+    closeMenus();
+    $(id).hidden = !opening;
+  }
+
+  function wireChrome() {
+    $('addpanel-btn').addEventListener('click', () => toggleMenu('addmenu'));
+    $('extras-btn').addEventListener('click', () => toggleMenu('extras'));
+    $('help-btn').addEventListener('click', () => toggleHelp());
+    document.addEventListener('pointerdown', (e) => {
+      if (anyMenuOpen() && !e.target.closest('#addmenu, #extras, #addpanel-btn, #extras-btn')) closeMenus();
+    }, true);
+    for (const b of document.querySelectorAll('[data-dock]')) {
+      b.addEventListener('click', () => {
+        const t = b.dataset.dock;
+        if (t === 'agent') {
+          const a = adapters.find((x) => x.id === 'claude') || adapters[0];
+          if (a) AIW.openTile('agent', { adapter: a.id, mode: 'read' });
+        } else AIW.openTile(t, {});
+      });
+    }
+    for (const b of document.querySelectorAll('[data-extra]')) {
+      b.addEventListener('click', () => {
+        const x = b.dataset.extra;
+        closeMenus();
+        if (x === 'fit') canvas.fitAll();
+        else if (x === 'reset') canvas.setZoom(1);
+        else if (x === 'bg') $('bg-btn').click();
+        else if (x === 'help') toggleHelp(true);
+      });
+    }
+  }
+
+  const ACTIVE_RUN = ['queued', 'starting', 'running', 'waiting_approval', 'cancelling'];
+  /** Migas de la barra superior: rama Git del proyecto y tareas de agentes en curso (como Deska). */
+  async function loadTopInfo() {
+    const pid = $('project').value;
+    const branch = $('branch');
+    if (pid) {
+      const r = await api.request('GET', `/v1/projects/${pid}/git`);
+      if (r.status === 200 && r.body.branch) {
+        branch.hidden = false;
+        branch.textContent = r.body.branch + (r.body.changes ? ` · ${r.body.changes} cambios` : '');
+      } else branch.hidden = true;
+    } else branch.hidden = true;
+    const rr = await api.request('GET', '/v1/runs');
+    const n = rr.status === 200 ? rr.body.runs.filter((x) => ACTIVE_RUN.includes(x.state)).length : 0;
+    const tasks = $('tasks');
+    tasks.hidden = n === 0;
+    tasks.textContent = `${n} tarea${n === 1 ? '' : 's'} en curso`;
+  }
+
   function buildToolbar() {
     const tb = $('toolbar');
-    const btn = (label, key, title, onClick) => h('button', { textContent: label, title, data: { add: key }, on: { click: onClick } });
-    const items = [btn('＋ Terminal', 'terminal', 'Ctrl+Shift+T', () => AIW.openTile('terminal', {}))];
-    for (const a of adapters) items.push(btn(`＋ ${a.displayName}`, `agent:${a.id}`, 'Panel de agente (Ctrl+Shift+A abre el primero)', () => AIW.openTile('agent', { adapter: a.id, mode: 'read' })));
+    const btn = (label, key, title, onClick) => h('button', { textContent: label, title, data: { add: key }, on: { click: () => { closeMenus(); onClick(); } } });
+    const section = (t) => h('div', { className: 'menu-section', textContent: t });
+    const items = [
+      section('Paneles'),
+      btn('▭  Terminal', 'terminal', 'Ctrl+Shift+T', () => AIW.openTile('terminal', {})),
+      btn('‹/›  Editor de código', 'editor', 'Ctrl+Shift+E', () => AIW.openTile('editor', {})),
+      btn('◍  Navegador', 'browser', 'Ctrl+Shift+B', () => AIW.openTile('browser', {})),
+      btn('✎  Notas', 'notes', 'Ctrl+Shift+N', () => AIW.openTile('notes', {})),
+      btn('▦  Apps del equipo', 'apps', 'Abrir VS Code, el Explorador, etc. en el proyecto', () => AIW.openTile('apps', {})),
+      section('Agentes de IA'),
+    ];
+    for (const a of adapters) items.push(btn(`✦  ${a.displayName}`, `agent:${a.id}`, 'Panel de agente (Ctrl+Shift+A abre el primero)', () => AIW.openTile('agent', { adapter: a.id, mode: 'read' })));
     // Sesiones interactivas reales de cada CLI, cada una en su propio panel/terminal.
     for (const a of adapters.filter((x) => ['claude', 'opencode'].includes(x.id))) {
-      items.push(btn(`＋ ${a.displayName} (CLI)`, `cli:${a.id}`, 'Sesión interactiva en su propio terminal', () => AIW.openTile('terminal', { label: `${a.displayName} (CLI)`, autorun: a.id })));
+      items.push(btn(`▭  ${a.displayName} (sesión CLI)`, `cli:${a.id}`, 'Sesión interactiva en su propio terminal', () => AIW.openTile('terminal', { label: `${a.displayName} (CLI)`, autorun: a.id })));
     }
-    items.push(btn('＋ Editor', 'editor', 'Ctrl+Shift+E', () => AIW.openTile('editor', {})));
-    items.push(btn('＋ Apps', 'apps', 'Abrir VS Code, el Explorador, etc. en el proyecto', () => AIW.openTile('apps', {})));
-    items.push(btn('＋ Navegador', 'browser', 'Ctrl+Shift+B', () => AIW.openTile('browser', {})));
-    items.push(btn('＋ Notas', 'notes', 'Ctrl+Shift+N', () => AIW.openTile('notes', {})));
-    items.push(h('button', { className: 'help-btn', textContent: '⌨ Atajos', title: 'F1', on: { click: () => toggleHelp() } }));
     tb.replaceChildren(...items);
   }
 
@@ -264,7 +341,8 @@
     window.addEventListener('beforeunload', () => canvas.disposeAll());
     window.addEventListener('keydown', onKey, true);
     $('add-project').addEventListener('click', addProject);
-    $('project').addEventListener('change', saveWorkspace);
+    $('project').addEventListener('change', () => { saveWorkspace(); loadTopInfo(); });
+    wireChrome();
     await loadHealth();
     const caps = await api.request('GET', '/v1/capabilities');
     adapters = caps.status === 200 ? caps.body.adapters : [];
@@ -295,8 +373,10 @@
     });
     ready = true;
     renderSpaces();
+    loadTopInfo();
     setInterval(() => {
       loadHealth();
+      loadTopInfo();
       for (const inst of canvas.instances()) if (inst.poll) inst.poll();
     }, 2000);
   })();

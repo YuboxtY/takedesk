@@ -7,25 +7,64 @@
   <title>AI Workspace</title>
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="deska.css">
 </head>
 <body>
-  <header>
-    <h1>AI Workspace</h1>
-    <span id="status" class="chip">conectando…</span>
-    <select id="project" title="Proyecto activo"></select>
-    <button id="add-project">Añadir carpeta…</button>
-    <span id="top-msg" class="msg bad"></span>
-    <button id="bg-btn" title="Fondo y tema">🎨 Fondo</button>
-  </header>
-  <div id="spaces" role="tablist" aria-label="Espacios"></div>
-  <nav id="toolbar" aria-label="Añadir panel"></nav>
+  <!-- El lienzo ocupa toda la ventana; todo lo demás flota encima (estilo Deska) -->
   <main id="canvas-scroll"><div id="canvas"></div></main>
-  <div id="hud" role="group" aria-label="Zoom">
+
+  <header id="topbar" class="float">
+    <span class="brand"><span class="brand-mark">◧</span> AI Workspace</span>
+    <span class="crumb">
+      <span class="crumb-sep">›</span>
+      <select id="project" title="Proyecto activo"></select>
+      <button id="add-project" class="icon-btn" title="Añadir carpeta de proyecto…">＋</button>
+      <span id="branch" class="chip" hidden title="Rama Git del proyecto"></span>
+      <span id="tasks" class="chip running" hidden></span>
+    </span>
+    <span id="top-msg" class="msg bad"></span>
+  </header>
+
+  <div id="topright" class="float">
+    <span id="status" class="chip">conectando…</span>
+    <button id="bg-btn" class="icon-btn" title="Fondo y tema">🎨 Fondo</button>
+    <button id="help-btn" class="icon-btn" title="Atajos de teclado (F1)">⌨ Atajos</button>
+  </div>
+
+  <nav id="rail" class="float" aria-label="Espacios">
+    <div class="rail-title">Espacios</div>
+    <div id="spaces" role="tablist" aria-label="Espacios"></div>
+  </nav>
+
+  <div id="addmenu" class="float" hidden>
+    <div class="menu-title">Añadir panel</div>
+    <nav id="toolbar" aria-label="Añadir panel"></nav>
+  </div>
+  <div id="extras" class="float" hidden>
+    <button data-extra="fit">⤢ Ajustar todo a la ventana</button>
+    <button data-extra="reset">⟲ Zoom al 100 %</button>
+    <button data-extra="bg">🎨 Fondo y tema</button>
+    <button data-extra="help">⌨ Atajos de teclado</button>
+  </div>
+
+  <footer id="dock" class="float" aria-label="Dock">
+    <button id="extras-btn" class="dock-btn wide" title="Más opciones">··· Extras ▴</button>
+    <button id="addpanel-btn" class="dock-btn wide primary" title="Añadir panel">＋ Añadir panel</button>
+    <span class="dock-sep"></span>
+    <button class="dock-btn" data-dock="editor" title="Editor de código (Ctrl+Shift+E)">‹/›</button>
+    <button class="dock-btn" data-dock="terminal" title="Terminal (Ctrl+Shift+T)">▭</button>
+    <button class="dock-btn" data-dock="browser" title="Navegador (Ctrl+Shift+B)">◍</button>
+    <button class="dock-btn" data-dock="notes" title="Notas (Ctrl+Shift+N)">✎</button>
+    <button class="dock-btn" data-dock="agent" title="Agente de IA (Ctrl+Shift+A)">✦</button>
+  </footer>
+
+  <div id="hud" class="float" role="group" aria-label="Zoom">
     <button id="zoom-out" title="Alejar (Ctrl+Alt+−)">−</button>
     <button id="zoom-reset" title="100 % (Ctrl+Alt+0)"><span id="zoom-label">100 %</span></button>
     <button id="zoom-in" title="Acercar (Ctrl+Alt++)">＋</button>
     <button id="zoom-fit" title="Ajustar todo (Ctrl+Alt+F)">⤢ Ajustar</button>
   </div>
+
   <div id="bg-menu" hidden></div>
   <div id="help" hidden></div>
   <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>

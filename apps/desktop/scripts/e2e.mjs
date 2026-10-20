@@ -62,6 +62,7 @@ async function connect(CDP) {
         const send = (method, params = {}) => new Promise((res) => { const n = ++id; pending.set(n, res); ws.send(JSON.stringify({ id: n, method, params })); });
         const evaluate = (expression) => send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
           .then((d) => { if (d.result.exceptionDetails) throw new Error(JSON.stringify(d.result.exceptionDetails.exception?.description ?? d.result.exceptionDetails)); return d.result.result.value; });
+        await send('Emulation.setFocusEmulationEnabled', { enabled: true }); // la ventana puede no tener el foco del sistema: sin esto Input.insertText se ignora
         return { evaluate, send, close: () => ws.close() };
       }
     } catch { /* aún no */ }
@@ -121,7 +122,7 @@ try {
   check('cada terminal muestra su propia salida (aislados)', await waitFor(async () => {
     const a = await tileText(page, 'terminal', 0, '.xterm-rows'); const b = await tileText(page, 'terminal', 1, '.xterm-rows');
     return a.includes('alfa-42') && !a.includes('beta-42') && b.includes('beta-42') && !b.includes('alfa-42');
-  }));
+  }), `T0=${JSON.stringify((await tileText(page, 'terminal', 0, '.xterm-rows')).split(/\s+/).join(' ').slice(-160))} T1=${JSON.stringify((await tileText(page, 'terminal', 1, '.xterm-rows')).split(/\s+/).join(' ').slice(-160))}`);
 
   // ---- dos agentes (dos "modelos") en paneles distintos
   await click(page, '[data-add="agent:fake"]');
@@ -206,6 +207,21 @@ try {
   check('Ctrl+Shift+W cierra el panel enfocado', (await key('KeyW', { ctrl: true, shift: true })) && await waitFor(async () => (await totalCount()) === 8));
   await key('F1');
   check('F1 muestra la ayuda de atajos y Escape la cierra', (await page.evaluate("!document.getElementById('help').hidden && document.getElementById('help').textContent.includes('Ctrl+Shift+T')")) && (await key('Escape')) === false && await waitFor(() => page.evaluate("document.getElementById('help').hidden")));
+  // ---- UI estilo Deska: barra superior, rail de espacios, dock
+  check('la barra superior muestra proyecto › rama Git', await waitFor(() => page.evaluate("document.querySelector('#topbar #project').value !== '' && document.getElementById('branch').textContent.includes('main') && !document.getElementById('branch').hidden")));
+  check('el rail de espacios dibuja una miniatura con un bloque por panel', await waitFor(() => page.evaluate("document.querySelector('#rail .space-tab.active .space-thumb').children.length === 7")));
+  await click(page, '#addpanel-btn');
+  check('«Añadir panel» abre el menú del dock con todos los tipos y agentes', await waitFor(() => page.evaluate("!document.getElementById('addmenu').hidden && document.querySelectorAll('#addmenu [data-add]').length >= 8")));
+  await key('Escape');
+  check('Escape cierra el menú', await waitFor(() => page.evaluate("document.getElementById('addmenu').hidden")));
+  await click(page, '[data-dock="notes"]');
+  check('los botones rápidos del dock crean paneles', await waitFor(async () => (await totalCount()) === 9));
+  await key('KeyW', { ctrl: true, shift: true });
+  await waitFor(async () => (await totalCount()) === 8);
+  await click(page, '#extras-btn');
+  check('Extras ofrece ajustar, zoom, fondo y atajos', await waitFor(() => page.evaluate("!document.getElementById('extras').hidden && document.querySelectorAll('#extras [data-extra]').length === 4")));
+  await key('Escape');
+
   // ---- zoom y paneo del lienzo infinito
   const vp = "document.getElementById('canvas-scroll')";
   const cam = () => page.evaluate(`(() => { const v = ${vp}; return { x: parseFloat(v.style.getPropertyValue('--vx')), y: parseFloat(v.style.getPropertyValue('--vy')), k: parseFloat(v.style.getPropertyValue('--vk')), label: document.getElementById('zoom-label').textContent }; })()`);
@@ -269,7 +285,7 @@ try {
   check('el color base se aplica', await waitFor(() => page.evaluate("document.getElementById('canvas-scroll').style.getPropertyValue('--bgc') === '#202040'")));
   await page.evaluate("(() => { const s = document.querySelector('.theme-select'); s.value = 'light'; s.dispatchEvent(new Event('change', { bubbles: true })); })()");
   check('el tema claro cambia los colores de la aplicación', await waitFor(() => page.evaluate("document.documentElement.getAttribute('data-theme') === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(244, 245, 247)'")));
-  check('con tema claro las apps (terminal, agente) conservan su aspecto oscuro', await page.evaluate("['terminal', 'agent'].every(t => getComputedStyle(document.querySelector('.tile[data-type=' + t + ']')).backgroundColor === 'rgb(22, 27, 34)') && getComputedStyle(document.querySelector('.tile[data-type=notes]')).backgroundColor !== 'rgb(22, 27, 34)'"));
+  check('con tema claro las apps (terminal, agente) conservan su aspecto oscuro', await page.evaluate("['terminal', 'agent'].every(t => getComputedStyle(document.querySelector('.tile[data-type=' + t + ']')).getPropertyValue('--panel').trim() === '#161b22') && getComputedStyle(document.querySelector('.tile[data-type=notes]')).getPropertyValue('--panel').trim() !== '#161b22'"));
   check('"＋ Mi imagen…" está siempre visible en el menú de fondo', await page.evaluate("!!document.querySelector('#bg-menu .bg-myimage')"));
   check('el catálogo incluye los degradados nuevos', await page.evaluate("(() => { document.querySelector('[data-bg-kind=gradient]').click(); return true; })()") && await waitFor(() => page.evaluate("['nebula','forest','ember'].every(id => document.querySelector('[data-bg-gradient=\"' + id + '\"]'))")));
   await click(page, '[data-bg-kind="image"]');

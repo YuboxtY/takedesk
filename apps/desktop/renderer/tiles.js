@@ -10,6 +10,9 @@
   const MIN_H = 160;
   const MIN_K = 0.1;
   const MAX_K = 3;
+  // Zonas ocupadas por las barras flotantes (arriba, rail de espacios, dock, HUD): la cámara y los paneles nuevos las respetan.
+  const INSET = { top: 84, left: 96, right: 24, bottom: 96 };
+  const HOME = { x: INSET.left + 20, y: INSET.top + 20, k: 1 };
   const snap = (v) => Math.round(v / GRID) * GRID;
   const clampK = (k) => Math.min(MAX_K, Math.max(MIN_K, k));
 
@@ -50,7 +53,7 @@
     let seq = 0;
     let activeSpace = null;
     let focusedId = null;
-    let view = { x: 40, y: 40, k: 1 };
+    let view = { ...HOME };
     let timer = null;
     let viewTimer = null;
     const changed = () => {
@@ -91,30 +94,32 @@
       const list = [...entries.values()].map((e) => e.tile).filter((t) => t.space === activeSpace);
       const { w, h: vh } = vsize();
       if (!list.length || !w) {
-        view = { x: 40, y: 40, k: 1 };
+        view = { ...HOME };
         return applyView();
       }
       const minX = Math.min(...list.map((t) => t.x));
       const minY = Math.min(...list.map((t) => t.y));
       const maxX = Math.max(...list.map((t) => t.x + t.w));
       const maxY = Math.max(...list.map((t) => t.y + t.h));
-      const pad = 60;
-      const k = clampK(Math.min((w - pad * 2) / (maxX - minX), (vh - pad * 2) / (maxY - minY), 1));
-      view = { k, x: (w - (maxX - minX) * k) / 2 - minX * k, y: (vh - (maxY - minY) * k) / 2 - minY * k };
+      const aw = w - INSET.left - INSET.right;
+      const ah = vh - INSET.top - INSET.bottom;
+      const k = clampK(Math.min(aw / (maxX - minX), ah / (maxY - minY), 1));
+      view = { k, x: INSET.left + (aw - (maxX - minX) * k) / 2 - minX * k, y: INSET.top + (ah - (maxY - minY) * k) / 2 - minY * k };
       applyView();
     }
 
     /** Desplaza la cámara lo mínimo para que el panel quede a la vista. */
     function ensureVisible(tile) {
       const { w, h: vh } = vsize();
-      const m = 30;
+      const m = 16;
+      const L = INSET.left + m, T = INSET.top + m, R = w - INSET.right - m, B = vh - INSET.bottom - m;
       const left = tile.x * view.k + view.x, top = tile.y * view.k + view.y;
       const right = left + tile.w * view.k, bottom = top + tile.h * view.k;
       let { x, y } = view;
-      if (left < m) x += m - left; else if (right > w - m) x -= right - (w - m);
-      if (top < m) y += m - top; else if (bottom > vh - m) y -= bottom - (vh - m);
-      if (tile.w * view.k > w - 2 * m) x = m - tile.x * view.k; // más ancho que la ventana: alinear a la izquierda
-      if (tile.h * view.k > vh - 2 * m) y = m - tile.y * view.k;
+      if (left < L) x += L - left; else if (right > R) x -= right - R;
+      if (top < T) y += T - top; else if (bottom > B) y -= bottom - B;
+      if (tile.w * view.k > R - L) x = L - tile.x * view.k; // más ancho que la zona libre: alinear a la izquierda
+      if (tile.h * view.k > B - T) y = T - tile.y * view.k;
       if (x !== view.x || y !== view.y) { view = { ...view, x, y }; applyView(); }
     }
 
@@ -210,9 +215,9 @@
     /** Primer hueco sin solapar dentro del área visible (en coordenadas del mundo); si no hay, en cascada. */
     function freeSpot(w, h, space) {
       const { w: vw, h: vh } = vsize();
-      const x0 = Math.ceil((-view.x / view.k + 40) / 20) * 20;
-      const y0 = Math.ceil((-view.y / view.k + 40) / 20) * 20;
-      const maxX = Math.max(x0 + w + 20, -view.x / view.k + (vw || 1200) / view.k - 20);
+      const x0 = Math.ceil(((INSET.left + 20 - view.x) / view.k) / 20) * 20;
+      const y0 = Math.ceil(((INSET.top + 20 - view.y) / view.k) / 20) * 20;
+      const maxX = Math.max(x0 + w + 20, ((vw || 1200) - INSET.right - view.x) / view.k);
       const maxY = y0 + Math.max(h + 40, 8000);
       const rects = [...entries.values()].map(({ tile }) => tile).filter((t) => t.space === space);
       const free = (x, y) => rects.every((r) => x + w + 10 <= r.x || r.x + r.w + 10 <= x || y + h + 10 <= r.y || r.y + r.h + 10 <= y);
@@ -291,7 +296,7 @@
     function setActiveSpace(space, nextView) {
       activeSpace = space;
       for (const e of entries.values()) e.frame.classList.toggle('other-space', e.tile.space !== space);
-      view = nextView && Number.isFinite(nextView.k) ? { x: nextView.x, y: nextView.y, k: clampK(nextView.k) } : { x: 40, y: 40, k: 1 };
+      view = nextView && Number.isFinite(nextView.k) ? { x: nextView.x, y: nextView.y, k: clampK(nextView.k) } : { ...HOME };
       applyView();
       const top = inSpace(space).sort((a, b) => b.tile.z - a.tile.z)[0];
       focusedId = null;
@@ -320,7 +325,7 @@
       zoomBy: (f) => zoomAt(f),
       setZoom,
       fitAll,
-      resetView: () => { view = { x: 40, y: 40, k: 1 }; applyView(); },
+      resetView: () => { view = { ...HOME }; applyView(); },
       getView: () => ({ ...view }),
       focused: () => focusedId,
       countIn: (space) => inSpace(space).length,

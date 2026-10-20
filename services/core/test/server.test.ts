@@ -85,6 +85,15 @@ describe('seguridad de la API', () => {
 });
 
 describe('proyectos y runs por HTTP', () => {
+  it('GET /projects/:id/git informa rama y cambios, y 404 para un proyecto inexistente', async () => {
+    const id = await addProject();
+    const g = await json(await api(`/v1/projects/${id}/git`));
+    expect(g).toEqual({ branch: 'main', clean: true, changes: 0 });
+    fs.writeFileSync(path.join(env.repo, 'nuevo.txt'), 'x');
+    expect(await json(await api(`/v1/projects/${id}/git`))).toMatchObject({ clean: false, changes: 1 });
+    expect((await api('/v1/projects/prj_nada/git')).status).toBe(404);
+  });
+
   it('registra un repo Git (idempotente) y rechaza lo que no es repo', async () => {
     const id = await addProject();
     expect(id).toMatch(/^prj_/);
