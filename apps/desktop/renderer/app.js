@@ -130,6 +130,7 @@
     ['Ctrl+Shift+A', 'Nuevo panel de agente (el primer modelo disponible)'],
     ['Ctrl+Shift+N', 'Nueva nota'],
     ['Ctrl+Shift+B', 'Nuevo navegador'],
+    ['Ctrl+Shift+E', 'Nuevo editor de código'],
     ['Ctrl+Shift+W', 'Cerrar el panel enfocado'],
     ['Ctrl+Shift+S', 'Nuevo espacio'],
     ['Ctrl+Alt+1 … 9', 'Ir al espacio 1 … 9'],
@@ -167,6 +168,7 @@
         }
         case 'KeyN': AIW.openTile('notes', {}); break;
         case 'KeyB': AIW.openTile('browser', {}); break;
+        case 'KeyE': AIW.openTile('editor', {}); break;
         case 'KeyW': { const f = canvas.focused(); if (f) canvas.remove(f, 'close'); break; }
         case 'KeyS': addSpace(); break;
         default: handled = false;
@@ -234,6 +236,7 @@
     for (const a of adapters.filter((x) => ['claude', 'opencode'].includes(x.id))) {
       items.push(btn(`＋ ${a.displayName} (CLI)`, `cli:${a.id}`, 'Sesión interactiva en su propio terminal', () => AIW.openTile('terminal', { label: `${a.displayName} (CLI)`, autorun: a.id })));
     }
+    items.push(btn('＋ Editor', 'editor', 'Ctrl+Shift+E', () => AIW.openTile('editor', {})));
     items.push(btn('＋ Navegador', 'browser', 'Ctrl+Shift+B', () => AIW.openTile('browser', {})));
     items.push(btn('＋ Notas', 'notes', 'Ctrl+Shift+N', () => AIW.openTile('notes', {})));
     items.push(h('button', { className: 'help-btn', textContent: '⌨ Atajos', title: 'F1', on: { click: () => toggleHelp() } }));

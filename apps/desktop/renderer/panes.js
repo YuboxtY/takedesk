@@ -365,5 +365,199 @@
     };
   }
 
-  AIW.builders = { terminal: terminalPane, agent: agentPane, review: reviewPane, notes: notesPane, browser: browserPane };
+  // ------------------------------------------------------------------ editor (Monaco) + explorador de archivos
+  let monacoPromise = null;
+  /** Monaco se carga la primera vez que se abre un editor (así el arranque es ligero y xterm no choca con su cargador AMD). */
+  function loadMonaco() {
+    if (monacoPromise) return monacoPromise;
+    monacoPromise = new Promise((resolve, reject) => {
+      const base = '../node_modules/monaco-editor/min/vs';
+      const s = h('script', { src: `${base}/loader.js` });
+      s.onerror = () => reject(new Error('No se pudo cargar el editor'));
+      s.onload = () => {
+        window.require.config({ paths: { vs: base }, 'vs/nls': { availableLanguages: { '*': 'es' } } });
+        window.require(['vs/editor/editor.main'], () => resolve(window.monaco), (e) => reject(new Error(String(e && e.message ? e.message : e))));
+      };
+      document.head.append(s);
+    });
+    return monacoPromise;
+  }
+  const monacoTheme = () => (AIW.themeIsLight && AIW.themeIsLight() ? 'vs' : 'vs-dark');
+  AIW.onTheme = () => { if (window.monaco) window.monaco.editor.setTheme(monacoTheme()); };
+
+  function editorPane(tile, c) {
+    c.setTitle('Editor');
+    const projectId = tile.state.projectId || AIW.app.projectId();
+    if (projectId && !tile.state.projectId) c.setState({ projectId });
+    const tree = h('div', { className: 'ed-tree' });
+    const tabsEl = h('div', { className: 'ed-tabs' });
+    const host = h('div', { className: 'ed-host' });
+    const status = h('div', { className: 'ed-status msg' });
+    const treeToggle = h('button', { className: 'ed-toggle', textContent: '☰', title: 'Mostrar u ocultar el explorador', on: { click: () => { tree.hidden = !tree.hidden; } } });
+    const save = h('button', { className: 'ed-save', textContent: 'Guardar', title: 'Guardar (Ctrl+S)', on: { click: () => saveActive(false) } });
+    c.actions.append(treeToggle, save);
+    c.body.classList.add('ed-body');
+    c.body.append(tree, h('div', { className: 'ed-main' }, tabsEl, host, status));
+
+    let monaco = null;
+    let editor = null;
+    let resolveReady;
+    const ready = new Promise((r) => { resolveReady = r; }); // las aperturas de archivo esperan a que Monaco esté cargado
+    let activeRel = null;
+    let destroyed = false;
+    let armedClose = null;
+    const docs = new Map(); // rel -> { model, mtimeMs, saved }
+
+    const say = (text, bad) => { status.replaceChildren(text || ''); status.classList.toggle('bad', Boolean(bad)); };
+    const isDirty = (d) => d.model.getValue() !== d.saved;
+    const persist = () => c.setState({ files: JSON.stringify([...docs.keys()]), active: activeRel || '' });
+
+    function renderTabs() {
+      tabsEl.replaceChildren(...[...docs.entries()].map(([rel, d]) => {
+        const name = rel.split('/').pop();
+        return h('div', { className: 'ed-tab' + (rel === activeRel ? ' active' : ''), title: rel, data: { file: rel }, on: { click: () => activate(rel) } },
+          h('span', { className: 'ed-tab-name', textContent: name + (isDirty(d) ? ' ●' : '') }),
+          h('button', { className: 'ed-tab-close', textContent: armedClose === rel ? '¿Descartar?' : '×', title: 'Cerrar', on: { click: (e) => { e.stopPropagation(); closeFile(rel); } } }));
+      }));
+    }
+
+    function activate(rel) {
+      const d = docs.get(rel);
+      if (!d || !editor) return;
+      activeRel = rel;
+      editor.setModel(d.model);
+      c.setTitle(`Editor · ${rel.split('/').pop()}`);
+      renderTabs();
+      persist();
+      editor.focus();
+    }
+
+    async function openFile(rel) {
+      if (!monaco) say('Cargando el editor…');
+      await ready;
+      if (destroyed) return;
+      if (docs.has(rel)) return activate(rel);
+      const r = await api.files.read(projectId, rel);
+      if (destroyed) return;
+      if (!r.ok) return say(`${rel}: ${r.error}`, true);
+      const ext = '.' + (rel.split('.').pop() || '').toLowerCase();
+      const lang = monaco.languages.getLanguages().find((l) => (l.extensions || []).includes(ext));
+      const model = monaco.editor.createModel(r.content, lang ? lang.id : 'plaintext');
+      const d = { model, mtimeMs: r.mtimeMs, saved: model.getValue() };
+      model.onDidChangeContent(() => renderTabs());
+      docs.set(rel, d);
+      say('');
+      activate(rel);
+    }
+
+    async function saveActive(force) {
+      const d = activeRel && docs.get(activeRel);
+      if (!d) return;
+      const value = d.model.getValue();
+      const r = await api.files.write(projectId, activeRel, value, { expectedMtimeMs: d.mtimeMs, force });
+      if (r.ok) {
+        d.mtimeMs = r.mtimeMs;
+        d.saved = value;
+        say(`Guardado ${activeRel}`);
+        renderTabs();
+      } else if (r.code === 'conflict') {
+        status.textContent = '';
+        status.classList.add('bad');
+        status.append('El archivo cambió en disco. ',
+          h('button', { className: 'ed-overwrite', textContent: 'Sobrescribir', on: { click: () => saveActive(true) } }), ' ',
+          h('button', { className: 'ed-reload', textContent: 'Recargar del disco', on: { click: () => reloadActive() } }));
+      } else say(r.error, true);
+    }
+
+    async function reloadActive() {
+      const rel = activeRel;
+      const d = rel && docs.get(rel);
+      if (!d) return;
+      const r = await api.files.read(projectId, rel);
+      if (!r.ok) return say(r.error, true);
+      d.model.setValue(r.content);
+      d.mtimeMs = r.mtimeMs;
+      d.saved = d.model.getValue();
+      say(`Recargado ${rel}`);
+      renderTabs();
+    }
+
+    function closeFile(rel) {
+      const d = docs.get(rel);
+      if (!d) return;
+      if (isDirty(d) && armedClose !== rel) { // con cambios sin guardar: pide un segundo clic
+        armedClose = rel;
+        renderTabs();
+        setTimeout(() => { if (armedClose === rel) { armedClose = null; renderTabs(); } }, 4000);
+        return;
+      }
+      armedClose = null;
+      docs.delete(rel);
+      d.model.dispose();
+      if (activeRel === rel) {
+        const next = [...docs.keys()].pop();
+        activeRel = null;
+        if (next) activate(next); else { editor.setModel(null); c.setTitle('Editor'); renderTabs(); persist(); }
+      } else { renderTabs(); persist(); }
+    }
+
+    // ---- explorador
+    const expanded = new Set();
+    async function fill(container, rel, depth) {
+      const r = await api.files.list(projectId, rel);
+      if (destroyed) return;
+      container.replaceChildren();
+      if (!r.ok) return container.append(h('div', { className: 'ed-err', textContent: r.error }));
+      for (const e of r.entries) {
+        const path = rel ? `${rel}/${e.name}` : e.name;
+        const row = h('div', { className: 'ed-node ' + e.type, data: { path, type: e.type }, attrs: { style: `padding-left:${8 + depth * 12}px` } });
+        if (e.type === 'dir') {
+          const kids = h('div', { className: 'ed-kids', hidden: !expanded.has(path) });
+          const arrow = h('span', { className: 'ed-arrow', textContent: expanded.has(path) ? '▾' : '▸' });
+          row.append(arrow, ' ' + e.name);
+          row.addEventListener('click', async () => {
+            if (expanded.has(path)) { expanded.delete(path); kids.hidden = true; arrow.textContent = '▸'; return; }
+            expanded.add(path); kids.hidden = false; arrow.textContent = '▾';
+            await fill(kids, path, depth + 1);
+          });
+          container.append(row, kids);
+          if (expanded.has(path)) fill(kids, path, depth + 1);
+        } else {
+          row.append('  ' + e.name);
+          row.addEventListener('click', () => openFile(path));
+          container.append(row);
+        }
+      }
+      if (r.truncated) container.append(h('div', { className: 'ed-err', textContent: '… hay más entradas de las que se muestran' }));
+    }
+    const refreshTree = () => fill(tree, '', 0);
+
+    if (!projectId) { say('Añade o selecciona un proyecto para abrir sus archivos.', true); return {}; }
+    refreshTree();
+    loadMonaco().then(async (m) => {
+      if (destroyed) return;
+      monaco = m;
+      m.editor.setTheme(monacoTheme());
+      editor = m.editor.create(host, { automaticLayout: true, minimap: { enabled: false }, fontSize: 13, scrollBeyondLastLine: false, model: null, fontFamily: 'Consolas, "Cascadia Mono", monospace' });
+      editor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => saveActive(false));
+      resolveReady();
+      let saved = [];
+      try { saved = JSON.parse(tile.state.files || '[]'); } catch { saved = []; }
+      const wanted = tile.state.active;
+      for (const rel of saved.filter((x) => typeof x === 'string').slice(0, 20)) await openFile(rel);
+      if (wanted && docs.has(wanted)) activate(wanted);
+      if (!docs.size) say('Elige un archivo en el explorador.');
+    }).catch((e) => say(String(e.message || e), true));
+
+    return {
+      refresh: refreshTree,
+      destroy() {
+        destroyed = true;
+        for (const d of docs.values()) d.model.dispose();
+        if (editor) editor.dispose();
+      },
+    };
+  }
+
+  AIW.builders = { terminal: terminalPane, agent: agentPane, review: reviewPane, notes: notesPane, browser: browserPane, editor: editorPane };
 })();

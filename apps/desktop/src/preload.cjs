@@ -4,6 +4,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('aiw', {
   request: (method, pathAndQuery, body) => ipcRenderer.invoke('core:request', method, pathAndQuery, body),
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+  files: {
+    list: (projectId, rel) => ipcRenderer.invoke('fs:list', projectId, rel),
+    read: (projectId, rel) => ipcRenderer.invoke('fs:read', projectId, rel),
+    write: (projectId, rel, content, opts) => ipcRenderer.invoke('fs:write', projectId, rel, content, opts),
+  },
   browser: {
     onOpenTab: (cb) => ipcRenderer.on('browser:open-tab', (_e, sourceId, url) => cb(sourceId, url)),
     onBlocked: (cb) => ipcRenderer.on('browser:blocked', (_e, msg) => cb(msg)),

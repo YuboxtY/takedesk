@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@xterm/addon-fit": "0.10",
-    "@xterm/xterm": "5"
+    "@xterm/xterm": "5",
+    "monaco-editor": "0.52"
   }
 }

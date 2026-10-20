@@ -44,7 +44,13 @@
   function applyTheme(theme) {
     const root = document.documentElement;
     if (!theme || theme === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', theme);
+    if (AIW.onTheme) AIW.onTheme();
   }
+
+  AIW.themeIsLight = () => {
+    const t = document.documentElement.getAttribute('data-theme');
+    return t === 'light' || (t !== 'dark' && window.matchMedia('(prefers-color-scheme: light)').matches);
+  };
 
   async function render() {
     const menu = document.getElementById('bg-menu');

@@ -20,7 +20,8 @@ if (mode === 'ok') {
     if (i >= n) { clearInterval(t); process.exit(0); }
   }, ms);
 } else if (mode === 'hang') {
-  const g = spawn('sleep', ['60'], { stdio: 'ignore' });
+  // nieto de larga vida portable (no depende de que exista el binario `sleep`, ausente en PowerShell/cmd)
+  const g = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
   out({ kind: 'output.delta', text: `grandchild ${g.pid}` });
   setInterval(() => {}, 1000);
 }

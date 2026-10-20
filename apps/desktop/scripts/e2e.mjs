@@ -24,7 +24,10 @@ const check = (name, ok, detail = '') => { results.push({ name, ok }); console.l
 const norm = (s) => s.replaceAll('\r\n', '\n');
 
 fs.mkdirSync(repo, { recursive: true });
-for (const a of [['init', '-q', '-b', 'main'], ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'i']]) execFileSync('git', a, { cwd: repo });
+fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
+fs.writeFileSync(path.join(repo, 'README.md'), '# Proyecto de prueba\n');
+fs.writeFileSync(path.join(repo, 'src', 'hello.js'), 'console.log("hola");\n');
+for (const a of [['init', '-q', '-b', 'main'], ['add', '.'], ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'i']]) execFileSync('git', a, { cwd: repo });
 
 // imagen de fondo sembrada en la carpeta de datos de la app (el diálogo nativo de archivos no se puede automatizar)
 const SEED_IMG = 'abcdef0123456789.png';
@@ -105,10 +108,16 @@ try {
   check('dos terminales en dos paneles', await waitFor(async () => (await countTiles(page, 'terminal')) === 2 && (await termIds(page)).length === 2));
   // esperar a que ambos shells muestren su prompt (en vez de una espera fija: el arranque de PowerShell varía con la carga)
   await waitFor(async () => (await tileText(page, 'terminal', 0, '.xterm-rows')).includes('PS ') && (await tileText(page, 'terminal', 1, '.xterm-rows')).includes('PS '), 30000);
-  const ids = await termIds(page);
-  const echo = (w) => (process.platform === 'win32' ? `echo ${w}-$(40+2)\\r` : `echo ${w}-$((40+2))\\n`);
-  await page.evaluate(`window.aiw.term.input(${JSON.stringify(ids[0])}, "${echo('alfa')}")`);
-  await page.evaluate(`window.aiw.term.input(${JSON.stringify(ids[1])}, "${echo('beta')}")`);
+  // teclear como un usuario: enfocar el xterm de CADA panel y enviar teclas reales (el orden de las sesiones del Core
+  // no tiene por qué coincidir con el orden de los paneles)
+  const typeIn = async (i, text) => {
+    await page.evaluate(`${tiles('terminal')}[${i}].querySelector('.xterm-helper-textarea').focus()`);
+    await page.send('Input.insertText', { text });
+    for (const type of ['rawKeyDown', 'keyUp']) await page.send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, text: type === 'rawKeyDown' ? '\r' : undefined });
+  };
+  const echo = (w) => (process.platform === 'win32' ? `echo ${w}-$(40+2)` : `echo ${w}-$((40+2))`);
+  await typeIn(0, echo('alfa'));
+  await typeIn(1, echo('beta'));
   check('cada terminal muestra su propia salida (aislados)', await waitFor(async () => {
     const a = await tileText(page, 'terminal', 0, '.xterm-rows'); const b = await tileText(page, 'terminal', 1, '.xterm-rows');
     return a.includes('alfa-42') && !a.includes('beta-42') && b.includes('beta-42') && !b.includes('alfa-42');
@@ -284,12 +293,41 @@ try {
   check('ni la barra ni la propia página pueden llevar el webview a file: o javascript:', (await page.evaluate(`${activeView}.getURL()`)).startsWith('http://127.0.0.1') && (await brTabs()).length === 2);
   await page.evaluate("document.querySelectorAll('.tile[data-type=browser] .br-tab')[0].click()");
   check('cambiar de pestaña muestra la otra página', await waitFor(async () => (await brTabs())[0].active) && (await page.evaluate(`${activeView}.getURL()`)).endsWith('/'));
+  // ---- editor (Monaco) y archivos del proyecto
+  const edTabs = () => page.evaluate("[...document.querySelectorAll('.tile[data-type=editor] .ed-tab')].map(t => ({ name: t.querySelector('.ed-tab-name').textContent, active: t.classList.contains('active') }))");
+  const treeNames = () => page.evaluate("[...document.querySelectorAll('.tile[data-type=editor] .ed-node')].map(n => n.dataset.type + ':' + n.dataset.path)");
+  const ctrlS = async () => { for (const type of ['rawKeyDown', 'keyUp']) await page.send('Input.dispatchKeyEvent', { type, modifiers: 2, key: 's', code: 'KeyS', windowsVirtualKeyCode: 83, nativeVirtualKeyCode: 83 }); };
+  const helloPath = path.join(repo, 'src', 'hello.js');
+  await click(page, '[data-add="editor"]');
+  check('el explorador lista carpetas y archivos del proyecto (sin .git)', await waitFor(async () => { const n = await treeNames(); return n.includes('dir:src') && n.includes('file:README.md') && !n.some((x) => x.includes('.git')); }));
+  await click(page, '.tile[data-type=editor] .ed-node[data-path="README.md"]');
+  check('abrir un archivo lo muestra en Monaco con su contenido', await waitFor(async () => (await page.evaluate("window.monaco ? window.monaco.editor.getModels().map(m => m.getValue()).join('|') : ''")).includes('# Proyecto de prueba') && (await edTabs())[0]?.name === 'README.md', 60000));
+  await click(page, '.tile[data-type=editor] .ed-node[data-path="src"]');
+  await waitFor(() => page.evaluate("!!document.querySelector('.tile[data-type=editor] .ed-node[data-path=\"src/hello.js\"]')"));
+  await click(page, '.tile[data-type=editor] .ed-node[data-path="src/hello.js"]');
+  check('el lenguaje se detecta por extensión (javascript)', await waitFor(() => page.evaluate("window.monaco.editor.getModels().some(m => m.getLanguageId() === 'javascript')")));
+  await page.evaluate("(() => { const ed = window.monaco.editor.getEditors()[0]; ed.focus(); ed.trigger('e2e', 'type', { text: '// editado\\n' }); })()");
+  check('editar marca el archivo como modificado (●)', await waitFor(async () => (await edTabs()).some((t) => t.name.includes('●'))));
+  await ctrlS();
+  check('Ctrl+S guarda en disco y quita la marca', await waitFor(() => norm(fs.readFileSync(helloPath, 'utf8')).startsWith('// editado\n')) && await waitFor(async () => !(await edTabs()).some((t) => t.name.includes('●'))));
+  // conflicto: el archivo cambia en disco mientras está abierto
+  const later = new Date(Date.now() + 120000);
+  fs.writeFileSync(helloPath, 'externo\n'); fs.utimesSync(helloPath, later, later);
+  await page.evaluate("(() => { const ed = window.monaco.editor.getEditors()[0]; ed.focus(); ed.trigger('e2e', 'type', { text: '// mío\\n' }); })()");
+  await ctrlS();
+  check('si el archivo cambió en disco, avisa y no lo pisa', await waitFor(async () => (await tileText(page, 'editor', 0, '.ed-status')).includes('cambió en disco')) && norm(fs.readFileSync(helloPath, 'utf8')) === 'externo\n');
+  await click(page, '.tile[data-type=editor] .ed-reload');
+  check('"Recargar del disco" trae la versión externa al editor', await waitFor(() => page.evaluate("window.monaco.editor.getEditors()[0].getValue().replaceAll('\\r\\n', '\\n') === 'externo\\n'")));
+  const pid = JSON.stringify(prj.id);
+  const bad = await page.evaluate(`Promise.all([window.aiw.files.read(${pid}, '../../Windows/win.ini'), window.aiw.files.read(${pid}, ${JSON.stringify('C:\\Windows\\win.ini')}), window.aiw.files.write(${pid}, '.git/config', 'x'), window.aiw.files.list(${pid}, '..'), window.aiw.files.read('prj_inexistente', 'README.md')])`);
+  check('el renderer no puede leer ni escribir fuera del proyecto ni en .git', bad.every((r) => r.ok === false) && bad.slice(0, 4).map((r) => r.code).join() === 'outside,outside,forbidden,outside', bad.map((r) => r.code).join());
   await sleep(1200); // guardado del layout con espacios y de la cámara
 
   // ---- cierre normal de la ventana (CA-03)
   await Promise.race([page.evaluate('window.close()'), sleep(1000)]).catch(() => {});
   page.close();
-  check('la app se cierra al cerrar la ventana', await waitFor(() => app1.exitCode !== null, 10000));
+  const t0close = Date.now();
+  check('la app se cierra al cerrar la ventana', await waitFor(() => app1.exitCode !== null, 10000), `${Date.now() - t0close} ms`);
   await sleep(1500);
   const tok = fs.readFileSync(path.join(dataDir, 'api-token'), 'utf8').trim();
   const coreTerms = await fetch(`http://127.0.0.1:${PORT}/v1/terminals`, { headers: { authorization: `Bearer ${tok}` } }).then((r) => r.json()).catch(() => ({ terminals: [] }));
@@ -298,15 +336,16 @@ try {
   // ================================================================= 2ª ejecución: restauración
   app2 = launch(9334);
   page = await connect(9334);
-  check('se restauran los 9 paneles (7 + la nota del espacio 2 + el navegador)', await waitFor(async () => (await page.evaluate("document.querySelectorAll('.tile').length")) === 9));
+  check('se restauran los 10 paneles (7 + nota del espacio 2 + navegador + editor)', await waitFor(async () => (await page.evaluate("document.querySelectorAll('.tile').length")) === 10));
+  check('el editor restaura sus archivos abiertos', await waitFor(async () => { const t = await edTabs(); return t.length === 2 && t.some((x) => x.name.startsWith('README.md')) && t.some((x) => x.name.startsWith('hello.js')); }, 60000), JSON.stringify(await edTabs()));
   check('el navegador restaura sus pestañas (y recarga sus páginas)', await waitFor(async () => { const t = await brTabs(); return t.length === 2 && t[0].title === 'Hola E2E' && t[1].title === 'Dos' && t[0].active; }), JSON.stringify(await brTabs()));
-  check('se restauran los espacios, su nombre y el espacio activo', await waitFor(async () => { const t = await tabs(); return t.length === 2 && t[0].name === 'Espacio 1' && t[1].name === 'Docs' && t[0].active && (await visibleCount()) === 8; }));
+  check('se restauran los espacios, su nombre y el espacio activo', await waitFor(async () => { const t = await tabs(); return t.length === 2 && t[0].name === 'Espacio 1' && t[1].name === 'Docs' && t[0].active && (await visibleCount()) === 9; }));
   check('la cámara (zoom y posición) del espacio se restaura', await waitFor(async () => Math.abs((await cam()).k - globalThis.savedK) < 0.01), `${(await cam()).label}`);
   check('el fondo (imagen) y el tema claro se restauran tras reabrir', await waitFor(async () => (await bgClass()) === 'bg-image' && (await page.evaluate("document.documentElement.getAttribute('data-theme')")) === 'light'));
   await key('Digit2', { ctrl: true, alt: true });
   check('el espacio 2 conserva su nota con texto', await waitFor(async () => (await visibleCount()) === 1 && (await inTile(page, 'notes', 1, '.notes-area', "if (e.value !== 'nota del espacio 2') throw new Error('x')"))));
   await key('Digit1', { ctrl: true, alt: true });
-  await waitFor(async () => (await visibleCount()) === 8);
+  await waitFor(async () => (await visibleCount()) === 9);
   const after = { term0: await rect(page, 'terminal', 0), agent0: await rect(page, 'agent', 0) };
   check('se restauran posiciones y tamaños', JSON.stringify(after) === JSON.stringify({ term0: layoutBefore.term0, agent0: layoutBefore.agent0 }), JSON.stringify(after));
   check('las notas conservan su texto', await waitFor(async () => (await inTile(page, 'notes', 0, '.notes-area', "if (e.value !== 'recordatorio persistente') throw new Error('x')"))));
@@ -321,7 +360,7 @@ try {
   await page.evaluate("document.querySelectorAll('.space-tab')[1].querySelector('.space-close').click()");
   check('cerrar un espacio con paneles pide confirmar', await waitFor(async () => (await page.evaluate("document.querySelector('.space-close.armed')?.textContent ?? ''")).includes('¿Cerrar')) && (await tabs()).length === 2);
   await page.evaluate("document.querySelector('.space-close.armed').click()");
-  check('al confirmar se cierra el espacio y sus paneles', await waitFor(async () => (await tabs()).length === 1 && (await totalCount()) === 7), `${(await tabs()).length} espacios, ${await totalCount()} paneles`);
+  check('al confirmar se cierra el espacio y sus paneles', await waitFor(async () => (await tabs()).length === 1 && (await totalCount()) === 8), `${(await tabs()).length} espacios, ${await totalCount()} paneles`);
   page.close();
 } catch (e) {
   check('ejecución sin excepciones', false, String(e.message || e));

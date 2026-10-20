@@ -7,6 +7,8 @@ const { ensureCore } = require('./core-launcher.cjs');
 const { createTerminalBridge } = require('./terminal-bridge.cjs');
 const { sanitizeWorkspace } = require('./workspace.cjs');
 const backgrounds = require('./backgrounds.cjs');
+const files = require('./files.cjs');
+const { FileError } = files;
 
 const BROWSER_PARTITION = 'persist:aiw-browser';
 const isWeb = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
@@ -94,6 +96,25 @@ ipcMain.on('term:input', (_e, id, data) => bridge && bridge.input(String(id), da
 ipcMain.on('term:resize', (_e, id, cols, rows) => bridge && bridge.resize(String(id), cols, rows));
 ipcMain.handle('workspace:load', () => loadWorkspace());
 ipcMain.handle('workspace:save', (_e, w) => saveWorkspace(w && typeof w === 'object' ? w : {}));
+
+// Archivos del proyecto para el panel Editor: el renderer envía (projectId, ruta relativa); la raíz sale del Core.
+async function projectRoot(projectId) {
+  if (!request || typeof projectId !== 'string') throw new FileError('invalid', 'Proyecto no válido');
+  const r = await request('GET', '/v1/projects');
+  const p = r.status === 200 && r.body.projects.find((x) => x.id === projectId);
+  if (!p) throw new FileError('invalid', 'Proyecto inexistente');
+  return p.rootPath;
+}
+const fileCall = (fn) => async (_e, projectId, ...args) => {
+  try {
+    return { ok: true, ...(await fn(await projectRoot(projectId), ...args)) };
+  } catch (e) {
+    return { ok: false, code: e.code || 'error', error: String(e && e.message ? e.message : e) };
+  }
+};
+ipcMain.handle('fs:list', fileCall((root, rel) => files.listDir(root, rel || '')));
+ipcMain.handle('fs:read', fileCall((root, rel) => files.readFile(root, rel)));
+ipcMain.handle('fs:write', fileCall((root, rel, content, opts) => files.writeFile(root, rel, content, { expectedMtimeMs: opts && opts.expectedMtimeMs, force: Boolean(opts && opts.force) })));
 
 const bgDir = () => path.join(app.getPath('userData'), 'backgrounds');
 ipcMain.handle('bg:pick', async () => {
