@@ -382,8 +382,8 @@
     });
     return monacoPromise;
   }
-  const monacoTheme = () => (AIW.themeIsLight && AIW.themeIsLight() ? 'vs' : 'vs-dark');
-  AIW.onTheme = () => { if (window.monaco) window.monaco.editor.setTheme(monacoTheme()); };
+  // El tema claro/oscuro de la aplicación NO cambia las apps: el editor conserva siempre su tema oscuro.
+  const monacoTheme = () => 'vs-dark';
 
   function editorPane(tile, c) {
     c.setTitle('Editor');

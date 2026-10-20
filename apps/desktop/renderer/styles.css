@@ -130,3 +130,6 @@ kbd { font: 12px Consolas, monospace; padding: 2px 6px; border: 1px solid var(--
 /* apps */
 .apps-list { display: flex; flex-direction: column; gap: 6px; }
 .app-btn { text-align: left; padding: 8px 12px; }
+
+/* Las apps (terminal, editor, navegador, agentes, lanzador) conservan su aspecto oscuro con cualquier tema de la aplicación */
+.tile[data-type="terminal"], .tile[data-type="editor"], .tile[data-type="browser"], .tile[data-type="agent"], .tile[data-type="apps"] { --bg: #0e1116; --panel: #161b22; --fg: #e6e8eb; --muted: #9aa3ad; --line: #2b323b; --accent: #5b8def; --bad: #f97066; --ok: #4ac26b; color-scheme: dark; }

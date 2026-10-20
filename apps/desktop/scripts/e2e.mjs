@@ -269,6 +269,11 @@ try {
   check('el color base se aplica', await waitFor(() => page.evaluate("document.getElementById('canvas-scroll').style.getPropertyValue('--bgc') === '#202040'")));
   await page.evaluate("(() => { const s = document.querySelector('.theme-select'); s.value = 'light'; s.dispatchEvent(new Event('change', { bubbles: true })); })()");
   check('el tema claro cambia los colores de la aplicación', await waitFor(() => page.evaluate("document.documentElement.getAttribute('data-theme') === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(244, 245, 247)'")));
+  check('con tema claro las apps (terminal, agente) conservan su aspecto oscuro', await page.evaluate("['terminal', 'agent'].every(t => getComputedStyle(document.querySelector('.tile[data-type=' + t + ']')).backgroundColor === 'rgb(22, 27, 34)') && getComputedStyle(document.querySelector('.tile[data-type=notes]')).backgroundColor !== 'rgb(22, 27, 34)'"));
+  check('"＋ Mi imagen…" está siempre visible en el menú de fondo', await page.evaluate("!!document.querySelector('#bg-menu .bg-myimage')"));
+  check('el catálogo incluye los degradados nuevos', await page.evaluate("(() => { document.querySelector('[data-bg-kind=gradient]').click(); return true; })()") && await waitFor(() => page.evaluate("['nebula','forest','ember'].every(id => document.querySelector('[data-bg-gradient=\"' + id + '\"]'))")));
+  await click(page, '[data-bg-kind="image"]');
+  await click(page, `[data-bg-image="${SEED_IMG}"]`);
   await key('Escape');
   check('Escape cierra el menú', await waitFor(() => page.evaluate("document.getElementById('bg-menu').hidden")));
   await key('Digit2', { ctrl: true, alt: true });

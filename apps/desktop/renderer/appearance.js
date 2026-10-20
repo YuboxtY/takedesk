@@ -12,6 +12,9 @@
     ocean: ['Océano', 'linear-gradient(160deg, #031b34, #0b4f6c 55%, #20a4a0)'],
     graphite: ['Grafito', 'linear-gradient(135deg, #16181d, #2a2f38)'],
     paper: ['Papel', 'linear-gradient(135deg, #f6f1e7, #e4dccb)'],
+    nebula: ['Nebulosa', 'radial-gradient(circle at 20% 20%, #5b2a86 0, transparent 45%), radial-gradient(circle at 80% 30%, #1f4e8c 0, transparent 50%), radial-gradient(circle at 50% 90%, #0b3d3a 0, transparent 55%), #0a0a14'],
+    forest: ['Bosque', 'linear-gradient(160deg, #0d1f17, #1d4a33 55%, #3c7a52)'],
+    ember: ['Brasas', 'linear-gradient(145deg, #1a0b0b, #5a1e12 55%, #c2561b)'],
   };
   const THEMES = [['system', 'Sistema'], ['dark', 'Oscuro'], ['light', 'Claro']];
   const imageCache = new Map();
@@ -68,7 +71,15 @@
     color.addEventListener('input', () => set({ color: color.value }));
     const resetColor = h('button', { textContent: 'Color por defecto', on: { click: () => { const { color: _c, ...rest } = bg; ctx.setBg(rest); apply(ctx.getBg()); render(); } } });
 
-    const parts = [h('h3', { textContent: 'Fondo de este espacio' }), kindRow, h('div', { className: 'row' }, h('label', { textContent: 'Color ' }, color), resetColor)];
+    // Acceso directo siempre visible: una imagen propia como fondo (se copia a la carpeta de la app).
+    const myImageMsg = h('span', { className: 'msg' });
+    const myImage = h('button', { className: 'bg-myimage primary', textContent: '＋ Mi imagen…', title: 'Usar una imagen de tu PC como fondo de este espacio', on: { click: async () => {
+      const r = await api.bg.pick();
+      if (!r) return;
+      if (r.error) { myImageMsg.textContent = r.error; myImageMsg.classList.add('bad'); return; }
+      set({ kind: 'image', image: r.name });
+    } } });
+    const parts = [h('h3', { textContent: 'Fondo de este espacio' }), h('div', { className: 'row' }, myImage, myImageMsg), kindRow, h('div', { className: 'row' }, h('label', { textContent: 'Color ' }, color), resetColor)];
 
     if (bg.kind === 'gradient') {
       parts.push(h('div', { className: 'bg-kinds' }, ...Object.entries(GRADIENTS).map(([id, [label, css]]) => h('button', {
