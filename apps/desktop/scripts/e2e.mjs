@@ -43,7 +43,7 @@ const web = http.createServer((req, res) => {
 await new Promise((r) => web.listen(0, '127.0.0.1', r));
 const WEBPORT = web.address().port;
 
-const env = { ...process.env, AIW_DATA_DIR: dataDir, AIW_PORT: String(PORT), AIW_ENABLE_FAKE: '1', AIW_RESERVE_MEM_GB: '0', AIW_MIN_FREE_DISK_GB: '0' };
+const env = { ...process.env, AIW_DATA_DIR: dataDir, AIW_PORT: String(PORT), AIW_ENABLE_FAKE: '1', AIW_RESERVE_MEM_GB: '0', AIW_MIN_FREE_DISK_GB: '0', AIW_APPS_DRYRUN: '1' }; // DRYRUN: las apps externas no se abren de verdad en la prueba
 delete env.ELECTRON_RUN_AS_NODE;
 const stop = (p) => { try { execFileSync('taskkill', ['/PID', String(p.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* ya cerrado */ } };
 const logFile = path.join(os.tmpdir(), 'aiw-e2e-electron.log');
@@ -321,6 +321,16 @@ try {
   const pid = JSON.stringify(prj.id);
   const bad = await page.evaluate(`Promise.all([window.aiw.files.read(${pid}, '../../Windows/win.ini'), window.aiw.files.read(${pid}, ${JSON.stringify('C:\\Windows\\win.ini')}), window.aiw.files.write(${pid}, '.git/config', 'x'), window.aiw.files.list(${pid}, '..'), window.aiw.files.read('prj_inexistente', 'README.md')])`);
   check('el renderer no puede leer ni escribir fuera del proyecto ni en .git', bad.every((r) => r.ok === false) && bad.slice(0, 4).map((r) => r.code).join() === 'outside,outside,forbidden,outside', bad.map((r) => r.code).join());
+  // ---- apps del equipo (lista cerrada; en la prueba no se abren de verdad)
+  await click(page, '[data-add="apps"]');
+  check('el panel Apps ofrece las apps del equipo', await waitFor(() => page.evaluate("!!document.querySelector('.tile[data-type=apps] [data-app=explorer]:not([disabled])') && !!document.querySelector('.tile[data-type=apps] [data-app=vscode]')")));
+  await click(page, '.tile[data-type=apps] [data-app=explorer]');
+  check('lanzar una app informa el resultado', await waitFor(async () => (await tileText(page, 'apps', 0, '.apps-msg')).includes('Abierto: Explorador')));
+  const appLaunch = (id, p = pid) => page.evaluate(`window.aiw.apps.launch(${JSON.stringify(id)}, ${p})`);
+  const ex = await appLaunch('explorer');
+  check('el comando es fijo y su único argumento es la raíz del proyecto', ex.ok && ex.dryRun.exe.toLowerCase().endsWith('explorer.exe') && ex.dryRun.args.length === 1 && ex.dryRun.args[0].toLowerCase() === fs.realpathSync.native(repo).toLowerCase(), JSON.stringify(ex.dryRun));
+  const bad2 = [await appLaunch('calc'), await appLaunch('cmd'), await appLaunch('explorer;calc'), await appLaunch('..\explorer'), await appLaunch('explorer', JSON.stringify('prj_inexistente'))];
+  check('no se puede lanzar nada fuera de la lista ni en proyectos inexistentes', bad2.every((r) => r.ok === false));
   await sleep(1200); // guardado del layout con espacios y de la cámara
 
   // ---- cierre normal de la ventana (CA-03)
@@ -336,16 +346,16 @@ try {
   // ================================================================= 2ª ejecución: restauración
   app2 = launch(9334);
   page = await connect(9334);
-  check('se restauran los 10 paneles (7 + nota del espacio 2 + navegador + editor)', await waitFor(async () => (await page.evaluate("document.querySelectorAll('.tile').length")) === 10));
+  check('se restauran los 11 paneles (7 + nota del espacio 2 + navegador + editor + apps)', await waitFor(async () => (await page.evaluate("document.querySelectorAll('.tile').length")) === 11));
   check('el editor restaura sus archivos abiertos', await waitFor(async () => { const t = await edTabs(); return t.length === 2 && t.some((x) => x.name.startsWith('README.md')) && t.some((x) => x.name.startsWith('hello.js')); }, 60000), JSON.stringify(await edTabs()));
   check('el navegador restaura sus pestañas (y recarga sus páginas)', await waitFor(async () => { const t = await brTabs(); return t.length === 2 && t[0].title === 'Hola E2E' && t[1].title === 'Dos' && t[0].active; }), JSON.stringify(await brTabs()));
-  check('se restauran los espacios, su nombre y el espacio activo', await waitFor(async () => { const t = await tabs(); return t.length === 2 && t[0].name === 'Espacio 1' && t[1].name === 'Docs' && t[0].active && (await visibleCount()) === 9; }));
+  check('se restauran los espacios, su nombre y el espacio activo', await waitFor(async () => { const t = await tabs(); return t.length === 2 && t[0].name === 'Espacio 1' && t[1].name === 'Docs' && t[0].active && (await visibleCount()) === 10; }));
   check('la cámara (zoom y posición) del espacio se restaura', await waitFor(async () => Math.abs((await cam()).k - globalThis.savedK) < 0.01), `${(await cam()).label}`);
   check('el fondo (imagen) y el tema claro se restauran tras reabrir', await waitFor(async () => (await bgClass()) === 'bg-image' && (await page.evaluate("document.documentElement.getAttribute('data-theme')")) === 'light'));
   await key('Digit2', { ctrl: true, alt: true });
   check('el espacio 2 conserva su nota con texto', await waitFor(async () => (await visibleCount()) === 1 && (await inTile(page, 'notes', 1, '.notes-area', "if (e.value !== 'nota del espacio 2') throw new Error('x')"))));
   await key('Digit1', { ctrl: true, alt: true });
-  await waitFor(async () => (await visibleCount()) === 9);
+  await waitFor(async () => (await visibleCount()) === 10);
   const after = { term0: await rect(page, 'terminal', 0), agent0: await rect(page, 'agent', 0) };
   check('se restauran posiciones y tamaños', JSON.stringify(after) === JSON.stringify({ term0: layoutBefore.term0, agent0: layoutBefore.agent0 }), JSON.stringify(after));
   check('las notas conservan su texto', await waitFor(async () => (await inTile(page, 'notes', 0, '.notes-area', "if (e.value !== 'recordatorio persistente') throw new Error('x')"))));
@@ -360,7 +370,7 @@ try {
   await page.evaluate("document.querySelectorAll('.space-tab')[1].querySelector('.space-close').click()");
   check('cerrar un espacio con paneles pide confirmar', await waitFor(async () => (await page.evaluate("document.querySelector('.space-close.armed')?.textContent ?? ''")).includes('¿Cerrar')) && (await tabs()).length === 2);
   await page.evaluate("document.querySelector('.space-close.armed').click()");
-  check('al confirmar se cierra el espacio y sus paneles', await waitFor(async () => (await tabs()).length === 1 && (await totalCount()) === 8), `${(await tabs()).length} espacios, ${await totalCount()} paneles`);
+  check('al confirmar se cierra el espacio y sus paneles', await waitFor(async () => (await tabs()).length === 1 && (await totalCount()) === 9), `${(await tabs()).length} espacios, ${await totalCount()} paneles`);
   page.close();
 } catch (e) {
   check('ejecución sin excepciones', false, String(e.message || e));

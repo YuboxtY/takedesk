@@ -8,6 +8,8 @@ const { createTerminalBridge } = require('./terminal-bridge.cjs');
 const { sanitizeWorkspace } = require('./workspace.cjs');
 const backgrounds = require('./backgrounds.cjs');
 const files = require('./files.cjs');
+const launchers = require('./launchers.cjs');
+const { spawn } = require('node:child_process');
 const { FileError } = files;
 
 const BROWSER_PARTITION = 'persist:aiw-browser';
@@ -115,6 +117,28 @@ const fileCall = (fn) => async (_e, projectId, ...args) => {
 ipcMain.handle('fs:list', fileCall((root, rel) => files.listDir(root, rel || '')));
 ipcMain.handle('fs:read', fileCall((root, rel) => files.readFile(root, rel)));
 ipcMain.handle('fs:write', fileCall((root, rel, content, opts) => files.writeFile(root, rel, content, { expectedMtimeMs: opts && opts.expectedMtimeMs, force: Boolean(opts && opts.force) })));
+
+// Apps del equipo: solo ids de una lista cerrada (launchers.cjs); AIW_APPS_DRYRUN=1 devuelve el comando sin ejecutarlo (pruebas).
+ipcMain.handle('apps:list', async (_e, projectId) => {
+  try {
+    return { ok: true, apps: launchers.list({ root: await projectRoot(projectId) }) };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message ? e.message : e) };
+  }
+});
+ipcMain.handle('apps:launch', async (_e, id, projectId) => {
+  try {
+    const spec = launchers.resolveLaunch(id, { root: await projectRoot(projectId) });
+    if (!spec) return { ok: false, error: 'App no disponible' };
+    if (process.env.AIW_APPS_DRYRUN === '1') return { ok: true, dryRun: spec };
+    const child = spawn(spec.exe, spec.args, { cwd: spec.cwd, detached: true, stdio: 'ignore', windowsHide: false });
+    child.on('error', () => {});
+    child.unref();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message ? e.message : e) };
+  }
+});
 
 const bgDir = () => path.join(app.getPath('userData'), 'backgrounds');
 ipcMain.handle('bg:pick', async () => {

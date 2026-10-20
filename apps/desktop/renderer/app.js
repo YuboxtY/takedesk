@@ -237,6 +237,7 @@
       items.push(btn(`＋ ${a.displayName} (CLI)`, `cli:${a.id}`, 'Sesión interactiva en su propio terminal', () => AIW.openTile('terminal', { label: `${a.displayName} (CLI)`, autorun: a.id })));
     }
     items.push(btn('＋ Editor', 'editor', 'Ctrl+Shift+E', () => AIW.openTile('editor', {})));
+    items.push(btn('＋ Apps', 'apps', 'Abrir VS Code, el Explorador, etc. en el proyecto', () => AIW.openTile('apps', {})));
     items.push(btn('＋ Navegador', 'browser', 'Ctrl+Shift+B', () => AIW.openTile('browser', {})));
     items.push(btn('＋ Notas', 'notes', 'Ctrl+Shift+N', () => AIW.openTile('notes', {})));
     items.push(h('button', { className: 'help-btn', textContent: '⌨ Atajos', title: 'F1', on: { click: () => toggleHelp() } }));

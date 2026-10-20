@@ -4,6 +4,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('aiw', {
   request: (method, pathAndQuery, body) => ipcRenderer.invoke('core:request', method, pathAndQuery, body),
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+  apps: {
+    list: (projectId) => ipcRenderer.invoke('apps:list', projectId),
+    launch: (id, projectId) => ipcRenderer.invoke('apps:launch', id, projectId),
+  },
   files: {
     list: (projectId, rel) => ipcRenderer.invoke('fs:list', projectId, rel),
     read: (projectId, rel) => ipcRenderer.invoke('fs:read', projectId, rel),

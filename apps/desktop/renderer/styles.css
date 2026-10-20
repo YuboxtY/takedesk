@@ -126,3 +126,7 @@ kbd { font: 12px Consolas, monospace; padding: 2px 6px; border: 1px solid var(--
 .ed-host { flex: 1; min-height: 0; }
 .ed-status { flex: none; padding: 3px 8px; font-size: 12px; border-top: 1px solid var(--line); min-height: 22px; }
 .ed-status button { padding: 0 8px; font-size: 12px; }
+
+/* apps */
+.apps-list { display: flex; flex-direction: column; gap: 6px; }
+.app-btn { text-align: left; padding: 8px 12px; }

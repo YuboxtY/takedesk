@@ -559,5 +559,33 @@
     };
   }
 
-  AIW.builders = { terminal: terminalPane, agent: agentPane, review: reviewPane, notes: notesPane, browser: browserPane, editor: editorPane };
+  // ------------------------------------------------------------------ apps del equipo
+  function appsPane(tile, c) {
+    c.setTitle('Apps');
+    const projectId = tile.state.projectId || AIW.app.projectId();
+    if (projectId && !tile.state.projectId) c.setState({ projectId });
+    const list = h('div', { className: 'apps-list' });
+    const msg = h('p', { className: 'apps-msg msg' });
+    c.body.append(
+      h('p', { className: 'msg', textContent: 'Abre estas apps en la carpeta del proyecto. Windows no permite incrustar sus ventanas dentro del lienzo: se abren aparte; el terminal, el editor y el navegador integrados sí viven aquí.' }),
+      list, msg,
+    );
+    (async () => {
+      if (!projectId) { msg.textContent = 'Añade o selecciona un proyecto primero.'; return; }
+      const r = await api.apps.list(projectId);
+      if (!r.ok) { msg.textContent = r.error; return; }
+      list.replaceChildren(...r.apps.map((a) => h('button', {
+        className: 'app-btn', textContent: a.label, disabled: !a.available, data: { app: a.id },
+        title: a.available ? 'Abrir en la carpeta del proyecto' : 'No está instalada',
+        on: { click: async () => {
+          const x = await api.apps.launch(a.id, projectId);
+          msg.textContent = x.ok ? `Abierto: ${a.label}` : x.error;
+          msg.classList.toggle('bad', !x.ok);
+        } },
+      })));
+    })();
+    return {};
+  }
+
+  AIW.builders = { terminal: terminalPane, agent: agentPane, review: reviewPane, notes: notesPane, browser: browserPane, editor: editorPane, apps: appsPane };
 })();
